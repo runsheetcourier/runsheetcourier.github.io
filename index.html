@@ -1,0 +1,1492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#14181D">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RunSheet">
+<title>RunSheet Courier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #14181D;
+    --surface: #1E242B;
+    --surface-2: #262E37;
+    --line: #333D48;
+    --amber: #FFB020;
+    --amber-dim: #8a6212;
+    --green: #37C871;
+    --red: #F26D6D;
+    --text: #F2F4F6;
+    --muted: #8B95A1;
+    --display: 'Barlow Condensed', system-ui, sans-serif;
+    --body: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { background: var(--bg); color: var(--text); font-family: var(--body); }
+  body { padding: max(env(safe-area-inset-top), 12px) 14px calc(env(safe-area-inset-bottom) + 24px); max-width: 560px; margin: 0 auto; }
+
+  header { display: flex; align-items: baseline; justify-content: space-between; padding: 6px 2px 14px; }
+  header h1 { font-family: var(--display); font-weight: 700; font-size: 30px; letter-spacing: 0.04em; text-transform: uppercase; }
+  header h1 span { color: var(--amber); }
+  .gps { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+  .gps-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .gps-dot.on { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2.5s infinite; }
+  .gps-dot.err { background: var(--red); }
+  @keyframes pulse { 50% { opacity: 0.5; } }
+  @media (prefers-reduced-motion: reduce) { .gps-dot.on { animation: none; } }
+
+  .add-row { display: flex; gap: 6px; margin-bottom: 8px; }
+  .add-row input { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 10px; color: var(--text); font-size: 16px; outline: none; }
+  .add-row input:focus { border-color: var(--amber); }
+  .add-row button { background: var(--amber); color: #1a1408; border: none; border-radius: 10px; padding: 0 14px; font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer; flex-shrink: 0; }
+  .add-row button:disabled { background: var(--amber-dim); color: #3a3325; }
+  .fav-open { background: var(--surface-2) !important; color: var(--amber) !important; border: 1px solid var(--line) !important; padding: 0 11px !important; font-size: 18px !important; flex-shrink: 0; }
+  .fav-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+  .fav-wrap { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+  .fav-wrap:last-child { border-bottom: none; }
+  .fav-del { position: absolute; top: 0; right: 0; bottom: 0; width: 96px; background: var(--red); color: #fff; border: none; font-family: var(--display); font-weight: 700; font-size: 16px; letter-spacing: 0.05em; text-transform: uppercase; cursor: pointer; }
+  .fav-row { display: flex; align-items: center; gap: 10px; padding: 12px 12px; background: var(--surface); position: relative; transition: transform 0.18s ease; touch-action: pan-y; }
+  .fav-row .mini { font-size: 16px; padding: 13px 18px; border-radius: 10px; }
+  .fav-row .nm { flex: 1; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+  .fav-row .sb { font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+  .fav-empty { padding: 16px 14px; font-size: 13px; color: var(--muted); }
+  .hint { font-size: 12px; color: var(--muted); margin: 0 2px 16px; }
+  .status-msg { font-size: 13px; margin: 0 2px 12px; color: var(--amber); min-height: 16px; }
+  .status-msg.error { color: var(--red); }
+
+  .section-label { font-family: var(--display); font-weight: 600; font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 18px 2px 8px; display: flex; justify-content: space-between; align-items: baseline; }
+  .section-label .count { color: var(--amber); }
+
+  /* NEXT JOB headboard card */
+  .next-card { background: var(--surface); border: 2px solid var(--amber); border-radius: 14px; padding: 16px 16px 14px; margin-bottom: 6px; }
+  .next-card .eyebrow { font-family: var(--display); font-weight: 700; font-size: 14px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--amber); margin-bottom: 6px; }
+  .next-card .addr { font-size: 19px; font-weight: 600; line-height: 1.3; margin-bottom: 4px; overflow-wrap: anywhere; }
+  .next-card .sub { font-size: 13px; color: var(--muted); margin-bottom: 12px; overflow-wrap: anywhere; }
+  .next-card .dist { font-family: var(--display); font-weight: 700; font-size: 44px; line-height: 1; color: var(--amber); font-variant-numeric: tabular-nums; margin-bottom: 14px; }
+  .next-card .dist small { font-size: 20px; font-weight: 600; color: var(--muted); margin-left: 4px; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn { flex: 1; border: none; border-radius: 10px; padding: 14px 6px; font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: 0.05em; text-transform: uppercase; cursor: pointer; text-align: center; text-decoration: none; }
+  .btn-nav { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); }
+  .btn-done { background: var(--green); color: #06240f; }
+
+  .job { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+  .job .info { flex: 1; min-width: 0; }
+  .job .addr { font-size: 15px; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
+  .job .sub { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .job .dist { font-family: var(--display); font-weight: 700; font-size: 22px; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .job .dist small { font-size: 13px; color: var(--muted); }
+  .job .mini { background: none; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 12px; padding: 8px 10px; cursor: pointer; white-space: nowrap; }
+  .job.done { opacity: 0.55; }
+  .job.done .addr { text-decoration: line-through; }
+  .job.pending-geo { border-style: dashed; }
+
+  .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 34px 20px; border: 1px dashed var(--line); border-radius: 12px; }
+  .footer-actions { margin-top: 20px; display: flex; gap: 8px; }
+  .footer-actions button { flex: 1; background: none; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 13px; padding: 12px; cursor: pointer; }
+  .note { font-size: 11px; color: var(--muted); text-align: center; margin-top: 18px; line-height: 1.5; }
+
+  .suggest { background: var(--surface); border: 1px solid var(--amber); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+  .suggest .sg-head { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .suggest .sg-head b { color: var(--text); }
+  .suggest button.sg-opt { display: flex; width: 100%; align-items: center; gap: 10px; text-align: left; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; color: var(--text); font-size: 14px; line-height: 1.35; padding: 12px; margin-bottom: 6px; cursor: pointer; }
+  .suggest button.sg-opt .sg-addr { flex: 1; overflow-wrap: anywhere; }
+  .suggest button.sg-opt .sg-km { font-family: var(--display); font-weight: 700; font-size: 14px; color: var(--muted); white-space: nowrap; }
+  .suggest button.sg-none { display: block; width: 100%; background: none; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 13px; padding: 10px; cursor: pointer; }
+
+  .map-panel { display: none; position: relative; height: 55vh; min-height: 300px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; overflow: hidden; background: var(--surface); }
+  .map-panel .map-msg { color: var(--muted); font-size: 13px; text-align: center; padding: 34px 16px; }
+  .me-arrow svg { display: block; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5)); }
+  .me-recenter { position: absolute; right: 10px; bottom: 26px; z-index: 5; width: 44px; height: 44px; border-radius: 50%; background: var(--surface); color: #1e88ff; border: 1px solid var(--line); font-size: 24px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+  .me-recenter.follow { border-color: var(--amber); color: var(--amber); box-shadow: 0 0 0 2px var(--amber-dim), 0 2px 8px rgba(0,0,0,0.4); }
+  .mapboxgl-popup-content { color: #000 !important; font-size: 13px; font-weight: 600; line-height: 1.4; }
+  .job-pin { width: 27px; height: 27px; border-radius: 50%; background: var(--amber); color: #241a00; font-family: var(--display); font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.45); cursor: pointer; }
+  .job-pin.next { background: var(--green); color: #06240f; }
+  .job-pin.done { background: var(--surface-2); color: var(--muted); border-color: var(--line); opacity: 0.8; }
+  .me-pin { width: 16px; height: 16px; border-radius: 50%; background: #1e88ff; border: 3px solid #fff; box-shadow: 0 0 0 3px rgba(30,136,255,0.35); }
+  .fuel-toggle { position: absolute; right: 10px; bottom: 78px; z-index: 5; width: 44px; height: 44px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); font-size: 20px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+  .fuel-toggle.on { border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber-dim), 0 2px 8px rgba(0,0,0,0.4); }
+  .fuel-pin { width: 22px; height: 22px; border-radius: 50%; background: #20262e; font-size: 12px; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.45); cursor: pointer; }
+  .fuel-status { position: absolute; left: 10px; bottom: 26px; z-index: 5; background: var(--surface); color: var(--muted); border: 1px solid var(--line); border-radius: 8px; font-size: 11px; padding: 5px 9px; max-width: 60%; }
+  .wc-toggle { position: absolute; right: 10px; bottom: 130px; z-index: 5; width: 44px; height: 44px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); font-size: 18px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+  .wc-toggle.on { border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber-dim), 0 2px 8px rgba(0,0,0,0.4); }
+  .wc-pin { width: 22px; height: 22px; border-radius: 50%; background: #1c4b6e; font-size: 11px; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.45); cursor: pointer; }
+  .wc-status { position: absolute; left: 10px; bottom: 58px; z-index: 5; background: var(--surface); color: var(--muted); border: 1px solid var(--line); border-radius: 8px; font-size: 11px; padding: 5px 9px; max-width: 60%; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Run<span>Sheet</span></h1>
+  <div style="display:flex;align-items:center;gap:12px">
+    <button id="mapBtn" style="background:var(--surface-2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:5px 12px;font-size:17px;cursor:pointer;line-height:1" title="Run overview map">&#128506;</button>
+    <div class="gps"><div class="gps-dot" id="gpsDot"></div><span id="gpsText">GPS off</span></div>
+  </div>
+</header>
+
+<div class="add-row">
+  <input id="addrInput" type="text" placeholder="Add delivery address" autocomplete="street-address" enterkeyhint="done">
+  <button id="favBtn" class="fav-open" title="Favourite addresses">&#9733;</button>
+  <button id="micBtn" style="display:none;background:var(--surface-2);color:var(--amber);border:1px solid var(--line);border-radius:10px;padding:0 11px;font-size:18px;cursor:pointer;flex-shrink:0" title="Speak address">&#127908;</button>
+  <button id="addBtn">Add</button>
+</div>
+<p class="hint">Tip: paste several addresses at once, one per line.</p>
+<div id="favPanel" style="display:none"></div>
+<p class="status-msg" id="statusMsg"></p>
+<div id="suggestBox" style="display:none"></div>
+<div id="mapPanel" class="map-panel"></div>
+
+<div id="nextWrap"></div>
+<div class="section-label" id="queueLabel" style="display:none">Then <span class="count" id="queueCount"></span></div>
+<div id="queueList"></div>
+<div id="emptyState" class="empty">No jobs yet. Add your first address above.</div>
+
+<div class="section-label" id="doneLabel" style="display:none">Delivered <span class="count" id="doneCount"></span></div>
+<div id="doneList"></div>
+
+<div class="footer-actions">
+  <button id="navPrefBtn" onclick="cycleNavApp()">Nav: Google Maps</button>
+  <button onclick="setStartPoint()">Set start point</button>
+  <button id="clearDoneBtn">Clear delivered</button>
+  <button id="clearAllBtn">Clear all</button>
+</div>
+
+<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Build 820</p>
+
+<script>
+(function () {
+  // ---------- safe storage (falls back to memory if unavailable) ----------
+  var mem = {};
+  var store = {
+    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return mem[k] || null; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { mem[k] = v; } }
+  };
+
+  var jobs = [];
+  try { jobs = JSON.parse(store.get('runsheet_jobs') || '[]'); } catch (e) { jobs = []; }
+  var here = null; // live GPS {lat, lon}
+  var manualStart = null; // typed fallback {lat, lon, label}
+  try { manualStart = JSON.parse(store.get('runsheet_start') || 'null'); } catch (e) { manualStart = null; }
+  function posNow() { return here || manualStart; }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var input = $('addrInput'), addBtn = $('addBtn'), statusMsg = $('statusMsg');
+
+  function save() { store.set('runsheet_jobs', JSON.stringify(jobs)); }
+  function setStatus(msg, isErr) {
+    statusMsg.textContent = msg || '';
+    statusMsg.className = 'status-msg' + (isErr ? ' error' : '');
+  }
+
+  // ---------- distance ----------
+  function haversineKm(a, b) {
+    var R = 6371, toRad = Math.PI / 180;
+    var dLat = (b.lat - a.lat) * toRad, dLon = (b.lon - a.lon) * toRad;
+    var s = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(a.lat * toRad) * Math.cos(b.lat * toRad) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return 2 * R * Math.asin(Math.sqrt(s));
+  }
+  function fmtDist(km) {
+    if (km == null) return { n: '—', u: '' };
+    if (km < 1) return { n: Math.round(km * 1000), u: 'm' };
+    return { n: km < 10 ? km.toFixed(1) : Math.round(km), u: 'km' };
+  }
+
+  // ---------- geocoding: Nominatim (addresses) then Photon (business names), 1/sec ----------
+  var geoQueue = [], geoBusy = false;
+  function geocode(job) {
+    geoQueue.push(job);
+    pumpGeo();
+  }
+  // Victoria bounding box: lon 140.95-150.05, lat -39.25 to -33.95
+  function inVic(lat, lon) {
+    return lat <= -33.95 && lat >= -39.25 && lon >= 140.95 && lon <= 150.05;
+  }
+  function tryNominatim(q) {
+    var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=au' +
+              '&viewbox=140.95,-33.95,150.05,-39.25&bounded=1&q=' +
+              encodeURIComponent(q);
+    return fetch(url, { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res || !res.length) return null;
+        var candidates = res.map(function (c) {
+          return { lat: parseFloat(c.lat), lon: parseFloat(c.lon), display: c.display_name };
+        }).filter(function (c) { return inVic(c.lat, c.lon); });
+        if (!candidates.length) return null;
+        // With multiple matches (e.g. Lonsdale St in the CBD vs Dandenong),
+        // prefer the one closest to where we are now.
+        var p = posNow();
+        if (p && candidates.length > 1) {
+          candidates.sort(function (a, b) {
+            return haversineKm(p, a) - haversineKm(p, b);
+          });
+        }
+        return candidates[0];
+      });
+  }
+  function tryPhoton(q) {
+    // Fuzzy place/business search on OSM data; biased toward current GPS position
+    // so e.g. "Bunnings" resolves to the nearest Bunnings.
+    var url = 'https://photon.komoot.io/api/?limit=5&bbox=140.95,-39.25,150.05,-33.95&q=' + encodeURIComponent(q);
+    var p = posNow();
+    if (p) url += '&lat=' + p.lat + '&lon=' + p.lon;
+    return fetch(url, { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        var feats = (res && res.features) ? res.features.filter(function (f) {
+          return f.properties && f.properties.countrycode === 'AU' &&
+                 f.geometry && inVic(f.geometry.coordinates[1], f.geometry.coordinates[0]);
+        }) : [];
+        if (!feats.length) return null;
+        // Prefer the candidate closest to where we are now.
+        var p2 = posNow();
+        if (p2 && feats.length > 1) {
+          feats.sort(function (a, b) {
+            return haversineKm(p2, { lat: a.geometry.coordinates[1], lon: a.geometry.coordinates[0] }) -
+                   haversineKm(p2, { lat: b.geometry.coordinates[1], lon: b.geometry.coordinates[0] });
+          });
+        }
+        var f = feats[0], p = f.properties;
+        var parts = [p.name, p.street && (p.housenumber ? p.housenumber + ' ' + p.street : p.street),
+                     p.district, p.city, p.state, p.postcode].filter(Boolean);
+        return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0],
+                 display: parts.join(', ') };
+      });
+  }
+  function pumpGeo() {
+    if (geoBusy || geoQueue.length === 0) return;
+    geoBusy = true;
+    var job = geoQueue.shift();
+    tryNominatim(job.label)
+      .then(function (hit) {
+        if (hit) return hit;
+        return new Promise(function (resolve) {
+          setTimeout(function () { resolve(tryPhoton(job.label)); }, 400);
+        });
+      })
+      .then(function (hit) {
+        if (hit) {
+          job.lat = hit.lat; job.lon = hit.lon; job.display = hit.display;
+          setStatus('');
+        } else {
+          job.error = true;
+          setStatus('Couldn\u2019t find "' + job.label + '" in Victoria \u2014 try adding a suburb, or use the street address.', true);
+        }
+        save(); render();
+      })
+      .catch(function () {
+        job.error = true;
+        setStatus('Network problem looking up "' + job.label + '". Tap Retry.', true);
+        save(); render();
+      })
+      .finally(function () {
+        setTimeout(function () { geoBusy = false; pumpGeo(); }, 1100);
+      });
+  }
+
+  // ---------- add ----------
+  function addAddresses(text) {
+    var lines = text.split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!lines.length) return;
+    if (lines.length === 1) { input.value = ''; suggestFor(lines[0]); return; }
+    // Batch paste: auto-geocode as before (a picker per line would be a chore)
+    lines.forEach(function (line) {
+      var job = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+                  label: line, lat: null, lon: null, display: null, status: 'queued', error: false };
+      jobs.push(job);
+      geocode(job);
+    });
+    save(); render();
+    input.value = '';
+    setStatus('Looking up ' + lines.length + ' addresses\u2026');
+  }
+
+  // ---------- single-add suggestion picker (voice & typed entries) ----------
+  var suggestBox = $('suggestBox');
+  function clearSuggest() { suggestBox.style.display = 'none'; suggestBox.innerHTML = ''; }
+
+  function mapboxSuggest(q) {
+    if (!MAPBOX_TOKEN || MAPBOX_TOKEN.indexOf('PASTE') === 0) return Promise.resolve([]);
+    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + encodeURIComponent(q) + '.json' +
+              '?access_token=' + encodeURIComponent(MAPBOX_TOKEN) +
+              '&country=au&limit=5&language=en-AU&bbox=140.95,-39.25,150.05,-33.95' +
+              '&types=address,poi,place,locality,neighborhood';
+    var p = posNow();
+    if (p) url += '&proximity=' + p.lon + ',' + p.lat;
+    return fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        var feats = (res && res.features) ? res.features : [];
+        return feats.map(function (f) {
+          return { lat: f.center[1], lon: f.center[0], display: f.place_name };
+        }).filter(function (c) { return inVic(c.lat, c.lon); });
+      })
+      .catch(function () { return []; });
+  }
+  function nominatimSuggest(q) {
+    var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=au' +
+              '&viewbox=140.95,-33.95,150.05,-39.25&bounded=1&q=' + encodeURIComponent(q);
+    return fetch(url, { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        var cands = (res || []).map(function (c) {
+          return { lat: parseFloat(c.lat), lon: parseFloat(c.lon), display: c.display_name };
+        }).filter(function (c) { return inVic(c.lat, c.lon); });
+        var p = posNow();
+        if (p && cands.length > 1) cands.sort(function (a, b) { return haversineKm(p, a) - haversineKm(p, b); });
+        return cands.slice(0, 3);
+      })
+      .catch(function () { return []; });
+  }
+  function photonSuggest(q) {
+    var url = 'https://photon.komoot.io/api/?limit=5&bbox=140.95,-39.25,150.05,-33.95&q=' + encodeURIComponent(q);
+    var p = posNow();
+    if (p) url += '&lat=' + p.lat + '&lon=' + p.lon;
+    return fetch(url, { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        var feats = (res && res.features) ? res.features.filter(function (f) {
+          return f.properties && f.properties.countrycode === 'AU' &&
+                 f.geometry && inVic(f.geometry.coordinates[1], f.geometry.coordinates[0]);
+        }) : [];
+        return feats.slice(0, 3).map(function (f) {
+          var pr = f.properties;
+          var parts = [pr.name, pr.street && (pr.housenumber ? pr.housenumber + ' ' + pr.street : pr.street),
+                       pr.district, pr.city, pr.state, pr.postcode].filter(Boolean);
+          return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], display: parts.join(', ') };
+        });
+      })
+      .catch(function () { return []; });
+  }
+  function fetchSuggestions(q) {
+    // Merge sources until we have up to 3 distinct options - Mapbox alone
+    // often returns a single confident hit, which defeats the picker.
+    function sameSpot(a, b) { return haversineKm(a, b) < 0.15; }
+    function mergeIn(list, extra) {
+      extra.forEach(function (c) {
+        if (list.length >= 3) return;
+        var dup = list.some(function (e) { return sameSpot(e, c); });
+        if (!dup) list.push(c);
+      });
+      return list;
+    }
+    return mapboxSuggest(q).then(function (list) {
+      list = list.slice(0, 3);
+      if (list.length >= 3) return list;
+      return nominatimSuggest(q).then(function (nom) {
+        list = mergeIn(list, nom);
+        if (list.length >= 3) return list;
+        return photonSuggest(q).then(function (pho) { return mergeIn(list, pho); });
+      });
+    });
+  }
+  function suggestFor(q) {
+    clearSuggest();
+    setStatus('Finding matches for \u201C' + q + '\u201D\u2026');
+    fetchSuggestions(q)
+      .then(function (list) {
+        if (!list.length) {
+          input.value = q;
+          setStatus('Couldn\u2019t find \u201C' + q + '\u201D in Victoria \u2014 edit it and try again (add a suburb).', true);
+          return;
+        }
+        setStatus('');
+        renderSuggest(q, list.slice(0, 3));
+      })
+      .catch(function () {
+        input.value = q;
+        setStatus('Network problem looking up \u201C' + q + '\u201D \u2014 tap Add to retry.', true);
+      });
+  }
+  function renderSuggest(q, list) {
+    suggestBox.innerHTML = '';
+    var head = document.createElement('div');
+    head.className = 'sg-head';
+    head.appendChild(document.createTextNode('Heard \u201C'));
+    var b = document.createElement('b'); b.textContent = q; head.appendChild(b);
+    head.appendChild(document.createTextNode('\u201D \u2014 tap the right one:'));
+    suggestBox.appendChild(head);
+    var p = posNow();
+    list.forEach(function (c) {
+      var btn = document.createElement('button');
+      btn.className = 'sg-opt';
+      var addr = document.createElement('span'); addr.className = 'sg-addr'; addr.textContent = c.display;
+      btn.appendChild(addr);
+      if (p) {
+        var d = fmtDist(haversineKm(p, c));
+        var km = document.createElement('span'); km.className = 'sg-km'; km.textContent = d.n + ' ' + d.u;
+        btn.appendChild(km);
+      }
+      btn.addEventListener('click', function () {
+        var job = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+                    label: q, lat: c.lat, lon: c.lon, display: c.display, status: 'queued', error: false };
+        jobs.push(job);
+        clearSuggest();
+        save(); render();
+      });
+      suggestBox.appendChild(btn);
+    });
+    var none = document.createElement('button');
+    none.className = 'sg-none';
+    none.textContent = 'None of these \u2014 edit and try again';
+    none.addEventListener('click', function () {
+      clearSuggest();
+      input.value = q;
+      input.focus();
+    });
+    suggestBox.appendChild(none);
+    suggestBox.style.display = 'block';
+  }
+
+  // ---------- run overview map (lazy-loaded Mapbox GL) ----------
+  var mapBtn = $('mapBtn'), mapPanel = $('mapPanel');
+  var mbMap = null, mbMarkers = [], mbLibLoading = false;
+  var mapFollow = false, followBtnEl = null;
+  function engageFollow() {
+    var p = posNow();
+    if (!mbMap || !p) return;
+    mbMap.easeTo({
+      center: [p.lon, p.lat],
+      zoom: Math.max(mbMap.getZoom ? mbMap.getZoom() : 14, 14),
+      bearing: (lastHeading != null ? lastHeading : (mbMap.getBearing ? mbMap.getBearing() : 0)),
+      duration: 600
+    });
+  }
+  var fuelOn = store.get('runsheet_fuel') === '1';
+  var fuelCache = null, fuelLoading = false, fuelToggleEl = null, fuelStatusEl = null;
+  var wcOn = store.get('runsheet_wc') === '1';
+  var wcCache = null, wcLoading = false, wcToggleEl = null, wcStatusEl = null;
+  function mapVisible() { return mapPanel.style.display === 'block'; }
+  mapBtn.addEventListener('click', function () {
+    if (mapVisible()) { mapPanel.style.display = 'none'; return; }
+    mapPanel.style.display = 'block';
+    ensureMap();
+  });
+  function ensureMap() {
+    if (mbMap) {
+      setTimeout(function () { mbMap.resize(); refreshMapMarkers(true); if (mapFollow) engageFollow(); }, 50);
+      return;
+    }
+    if (mbLibLoading) return;
+    if (!MAPBOX_TOKEN || MAPBOX_TOKEN.indexOf('PASTE') === 0) {
+      mapPanel.innerHTML = '<div class="map-msg">Map needs the Mapbox token.</div>';
+      return;
+    }
+    mbLibLoading = true;
+    mapPanel.innerHTML = '<div class="map-msg">Loading map\u2026</div>';
+    var css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css';
+    document.head.appendChild(css);
+    var s = document.createElement('script');
+    s.src = 'https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js';
+    s.onload = function () {
+      mapPanel.innerHTML = '';
+      mapboxgl.accessToken = MAPBOX_TOKEN;
+      mbMap = new mapboxgl.Map({
+        container: mapPanel,
+        style: 'mapbox://styles/mapbox/streets-v12',
+        center: [144.9631, -37.8136], zoom: 9
+      });
+      mbMap.addControl(new mapboxgl.NavigationControl({ showCompass: false }));
+      var rc = document.createElement('button');
+      rc.className = 'me-recenter';
+      rc.title = 'Follow me \u2014 map turns so you drive up the screen';
+      rc.textContent = '\u2316';
+      followBtnEl = rc;
+      rc.addEventListener('click', function () {
+        mapFollow = !mapFollow;
+        rc.className = 'me-recenter' + (mapFollow ? ' follow' : '');
+        if (mapFollow) {
+          engageFollow();
+        } else {
+          // back to overview: north-up, leave position where it is
+          mbMap.easeTo({ bearing: 0, duration: 500 });
+        }
+      });
+      mbMap.on('dragstart', function () {
+        // manual pan pauses following, nav-app style; tap \u2316 to re-engage
+        if (mapFollow) {
+          mapFollow = false;
+          if (followBtnEl) followBtnEl.className = 'me-recenter';
+        }
+      });
+      mapPanel.appendChild(rc);
+      fuelToggleEl = document.createElement('button');
+      fuelToggleEl.className = 'fuel-toggle' + (fuelOn ? ' on' : '');
+      fuelToggleEl.title = 'Show diesel servos';
+      fuelToggleEl.textContent = '\u26FD';
+      fuelToggleEl.addEventListener('click', function () {
+        fuelOn = !fuelOn;
+        store.set('runsheet_fuel', fuelOn ? '1' : '0');
+        fuelToggleEl.className = 'fuel-toggle' + (fuelOn ? ' on' : '');
+        if (fuelOn) { ensureFuelData(); } else { setFuelStatus(null); refreshMapMarkers(false); }
+      });
+      mapPanel.appendChild(fuelToggleEl);
+      fuelStatusEl = document.createElement('div');
+      fuelStatusEl.className = 'fuel-status';
+      fuelStatusEl.style.display = 'none';
+      mapPanel.appendChild(fuelStatusEl);
+      wcToggleEl = document.createElement('button');
+      wcToggleEl.className = 'wc-toggle' + (wcOn ? ' on' : '');
+      wcToggleEl.title = 'Show public toilets';
+      wcToggleEl.textContent = '\ud83d\udebb';
+      wcToggleEl.addEventListener('click', function () {
+        wcOn = !wcOn;
+        store.set('runsheet_wc', wcOn ? '1' : '0');
+        wcToggleEl.className = 'wc-toggle' + (wcOn ? ' on' : '');
+        if (wcOn) { ensureWcData(); } else { setWcStatus(null); refreshMapMarkers(false); }
+      });
+      mapPanel.appendChild(wcToggleEl);
+      wcStatusEl = document.createElement('div');
+      wcStatusEl.className = 'wc-status';
+      wcStatusEl.style.display = 'none';
+      mapPanel.appendChild(wcStatusEl);
+      mbMap.on('load', function () {
+        refreshMapMarkers(true);
+        if (fuelOn) ensureFuelData();
+        if (wcOn) ensureWcData();
+      });
+    };
+    s.onerror = function () {
+      mbLibLoading = false;
+      mapPanel.innerHTML = '<div class="map-msg">Couldn\u2019t load the map \u2014 check signal, close and tap the map button again.</div>';
+    };
+    document.head.appendChild(s);
+  }
+  function setFuelStatus(txt) {
+    if (!fuelStatusEl) return;
+    if (!txt) { fuelStatusEl.style.display = 'none'; return; }
+    fuelStatusEl.textContent = txt;
+    fuelStatusEl.style.display = 'block';
+  }
+  function ensureFuelData() {
+    if (fuelLoading) return;
+    var located = jobs.filter(function (j) { return j.lat != null; });
+    var p = posNow();
+    if (!located.length && !p) { setFuelStatus('Add a job first \u2014 servos show along the run'); return; }
+    var lats = located.map(function (j) { return j.lat; }), lons = located.map(function (j) { return j.lon; });
+    if (p) { lats.push(p.lat); lons.push(p.lon); }
+    var sBox = Math.min.apply(null, lats) - 0.03, nBox = Math.max.apply(null, lats) + 0.03;
+    var wBox = Math.min.apply(null, lons) - 0.03, eBox = Math.max.apply(null, lons) + 0.03;
+    var cLat = (sBox + nBox) / 2, cLon = (wBox + eBox) / 2;
+    if (fuelCache && Date.now() - fuelCache.ts < 15 * 60000 &&
+        haversineKm({ lat: cLat, lon: cLon }, { lat: fuelCache.cLat, lon: fuelCache.cLon }) < 2) {
+      refreshMapMarkers(false);
+      setFuelStatus(fuelCache.list.length + ' servos \u00b7 prices come with the gov data key');
+      return;
+    }
+    fuelLoading = true;
+    setFuelStatus('Finding servos\u2026');
+    var q = '[out:json][timeout:12];(node["amenity"="fuel"](' + sBox + ',' + wBox + ',' + nBox + ',' + eBox + ');' +
+            'way["amenity"="fuel"](' + sBox + ',' + wBox + ',' + nBox + ',' + eBox + '););out center 120;';
+    fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(q)
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        var list = (res && res.elements ? res.elements : []).map(function (el) {
+          var lat = el.lat != null ? el.lat : (el.center && el.center.lat);
+          var lon = el.lon != null ? el.lon : (el.center && el.center.lon);
+          if (lat == null || lon == null) return null;
+          var tg = el.tags || {};
+          if (tg['fuel:diesel'] === 'no') return null; // explicitly no diesel
+          var nm = tg.brand || tg.name || 'Servo';
+          return { lat: lat, lon: lon, name: nm };
+        }).filter(Boolean);
+        // keep the 45 closest to a job or to us, so metro sprawl doesn't bury the run
+        var anchors = jobs.filter(function (j) { return j.lat != null; }).slice();
+        var p2 = posNow();
+        if (p2) anchors.push(p2);
+        if (anchors.length && list.length > 45) {
+          list.forEach(function (st) {
+            st._d = Math.min.apply(null, anchors.map(function (a) { return haversineKm(a, st); }));
+          });
+          list.sort(function (a, b) { return a._d - b._d; });
+          list = list.slice(0, 45);
+        }
+        fuelCache = { list: list, ts: Date.now(), cLat: cLat, cLon: cLon };
+        refreshMapMarkers(false);
+        setFuelStatus(list.length ? list.length + ' servos \u00b7 prices come with the gov data key'
+                                  : 'No servos found in this area');
+      })
+      .catch(function () {
+        setFuelStatus('Servos unavailable \u2014 tap \u26FD twice to retry');
+      })
+      .finally(function () { fuelLoading = false; });
+  }
+  function setWcStatus(txt) {
+    if (!wcStatusEl) return;
+    if (!txt) { wcStatusEl.style.display = 'none'; return; }
+    wcStatusEl.textContent = txt;
+    wcStatusEl.style.display = 'block';
+  }
+  function ensureWcData() {
+    if (wcLoading) return;
+    var located = jobs.filter(function (j) { return j.lat != null; });
+    var p = posNow();
+    if (!located.length && !p) { setWcStatus('Add a job first \u2014 toilets show along the run'); return; }
+    var lats = located.map(function (j) { return j.lat; }), lons = located.map(function (j) { return j.lon; });
+    if (p) { lats.push(p.lat); lons.push(p.lon); }
+    var sBox = Math.min.apply(null, lats) - 0.03, nBox = Math.max.apply(null, lats) + 0.03;
+    var wBox = Math.min.apply(null, lons) - 0.03, eBox = Math.max.apply(null, lons) + 0.03;
+    var cLat = (sBox + nBox) / 2, cLon = (wBox + eBox) / 2;
+    if (wcCache && Date.now() - wcCache.ts < 30 * 60000 &&
+        haversineKm({ lat: cLat, lon: cLon }, { lat: wcCache.cLat, lon: wcCache.cLon }) < 2) {
+      refreshMapMarkers(false);
+      setWcStatus(wcCache.list.length + ' toilets shown');
+      return;
+    }
+    wcLoading = true;
+    setWcStatus('Finding toilets\u2026');
+    var q = '[out:json][timeout:12];(node["amenity"="toilets"](' + sBox + ',' + wBox + ',' + nBox + ',' + eBox + ');' +
+            'way["amenity"="toilets"](' + sBox + ',' + wBox + ',' + nBox + ',' + eBox + '););out center 120;';
+    fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(q)
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        var list = (res && res.elements ? res.elements : []).map(function (el) {
+          var lat = el.lat != null ? el.lat : (el.center && el.center.lat);
+          var lon = el.lon != null ? el.lon : (el.center && el.center.lon);
+          if (lat == null || lon == null) return null;
+          var tg = el.tags || {};
+          if (tg.access === 'private' || tg.access === 'no') return null;
+          var nm = tg.name || 'Public toilet';
+          if (tg.fee === 'yes') nm += ' (fee)';
+          return { lat: lat, lon: lon, name: nm };
+        }).filter(Boolean);
+        var anchors = jobs.filter(function (j) { return j.lat != null; }).slice();
+        var p2 = posNow();
+        if (p2) anchors.push(p2);
+        if (anchors.length && list.length > 40) {
+          list.forEach(function (st) {
+            st._d = Math.min.apply(null, anchors.map(function (a) { return haversineKm(a, st); }));
+          });
+          list.sort(function (a, b) { return a._d - b._d; });
+          list = list.slice(0, 40);
+        }
+        wcCache = { list: list, ts: Date.now(), cLat: cLat, cLon: cLon };
+        refreshMapMarkers(false);
+        setWcStatus(list.length ? list.length + ' toilets shown' : 'No public toilets mapped in this area');
+      })
+      .catch(function () {
+        setWcStatus('Toilets unavailable \u2014 tap \ud83d\udebb twice to retry');
+      })
+      .finally(function () { wcLoading = false; });
+  }
+  function refreshMapMarkers(fit) {
+    if (!mbMap || !window.mapboxgl) return;
+    mbMarkers.forEach(function (m) { m.remove(); });
+    mbMarkers = [];
+    var pts = [];
+    function addPin(el, lon, lat, popupText) {
+      var mk = new mapboxgl.Marker({ element: el }).setLngLat([lon, lat]);
+      if (popupText) mk.setPopup(new mapboxgl.Popup({ offset: 18, closeButton: false }).setText(popupText));
+      mk.addTo(mbMap);
+      mbMarkers.push(mk);
+      pts.push([lon, lat]);
+    }
+    // number queued pins in the same order as the on-screen run (next = 1)
+    var queued = jobs.filter(function (j) { return j.status === 'queued' && j.lat != null; });
+    queued.sort(function (a, b) {
+      if ((a._km == null) !== (b._km == null)) return a._km == null ? 1 : -1;
+      return (a._km || 0) - (b._km || 0);
+    });
+    var pinnedJob = queued.find(function (j) { return j.pinned; });
+    if (pinnedJob) queued = [pinnedJob].concat(queued.filter(function (j) { return j.id !== pinnedJob.id; }));
+    queued.forEach(function (j, i) {
+      var el = document.createElement('div');
+      el.className = 'job-pin' + (i === 0 ? ' next' : '');
+      el.textContent = (i + 1);
+      addPin(el, j.lon, j.lat, j.display || j.label);
+    });
+    jobs.filter(function (j) { return j.status === 'done' && j.lat != null; }).forEach(function (j) {
+      var el = document.createElement('div');
+      el.className = 'job-pin done';
+      el.textContent = '\u2713';
+      addPin(el, j.lon, j.lat, 'Delivered \u00b7 ' + (j.display || j.label));
+    });
+    if (wcOn && wcCache && wcCache.list.length) {
+      wcCache.list.forEach(function (st) {
+        var wel = document.createElement('div');
+        wel.className = 'wc-pin';
+        wel.textContent = '\ud83d\udebb';
+        var wmk = new mapboxgl.Marker({ element: wel }).setLngLat([st.lon, st.lat]);
+        wmk.setPopup(new mapboxgl.Popup({ offset: 16, closeButton: false }).setText(st.name));
+        wmk.addTo(mbMap);
+        mbMarkers.push(wmk);
+      });
+    }
+    if (fuelOn && fuelCache && fuelCache.list.length) {
+      fuelCache.list.forEach(function (st) {
+        var fel = document.createElement('div');
+        fel.className = 'fuel-pin';
+        fel.textContent = '\u26FD';
+        var fmk = new mapboxgl.Marker({ element: fel }).setLngLat([st.lon, st.lat]);
+        fmk.setPopup(new mapboxgl.Popup({ offset: 16, closeButton: false }).setText(st.name));
+        fmk.addTo(mbMap);
+        mbMarkers.push(fmk);
+      });
+    }
+    var p = posNow();
+    if (p) {
+      var me = document.createElement('div');
+      if (here && lastHeading != null) {
+        // travelling: navigation arrow rotated to the direction of travel
+        me.className = 'me-arrow';
+        me.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">' +
+                       '<path d="M12 2 L19 21 L12 17 L5 21 Z" fill="#1e88ff" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg>';
+        var meMk = new mapboxgl.Marker({ element: me, rotation: lastHeading, rotationAlignment: 'map' })
+          .setLngLat([p.lon, p.lat]);
+        meMk.addTo(mbMap);
+        mbMarkers.push(meMk);
+        pts.push([p.lon, p.lat]);
+      } else {
+        // parked or no live fix yet: plain dot
+        me.className = 'me-pin';
+        addPin(me, p.lon, p.lat, null);
+      }
+    }
+    if (fit && !mapFollow && pts.length) {
+      if (pts.length === 1) {
+        mbMap.jumpTo({ center: pts[0], zoom: 13 });
+      } else {
+        var b = new mapboxgl.LngLatBounds(pts[0], pts[0]);
+        pts.forEach(function (c) { b.extend(c); });
+        mbMap.fitBounds(b, { padding: 48, maxZoom: 14, duration: 0 });
+      }
+    }
+  }
+  addBtn.addEventListener('click', function () { addAddresses(input.value); });
+  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') addAddresses(input.value); });
+  input.addEventListener('paste', function (e) {
+    var t = (e.clipboardData || window.clipboardData).getData('text');
+    if (t && t.indexOf('\n') !== -1) { e.preventDefault(); addAddresses(t); }
+  });
+
+  // ---------- GPS ----------
+  var gpsDot = $('gpsDot'), gpsText = $('gpsText');
+  var gpsWatchId = null, lastFix = null, lastFixTime = 0, lastHeading = null;
+  function startGPS() {
+    if (!navigator.geolocation) { gpsDot.className = 'gps-dot err'; gpsText.textContent = 'No GPS support'; return; }
+    if (gpsWatchId != null) navigator.geolocation.clearWatch(gpsWatchId);
+    gpsText.textContent = 'GPS: locating\u2026';
+    gpsWatchId = navigator.geolocation.watchPosition(function (pos) {
+      here = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      if (pos.coords.heading != null && !isNaN(pos.coords.heading) && pos.coords.speed > 0.8) {
+        lastHeading = pos.coords.heading;
+      }
+      gpsDot.className = 'gps-dot on';
+      gpsText.textContent = 'GPS live';
+      // Only redraw when we've actually moved (>25 m) or every 5 s,
+      // so the screen doesn't flicker on every GPS tick while parked.
+      var now = Date.now();
+      if (!lastFix || haversineKm(lastFix, here) > 0.025 || now - lastFixTime > 5000) {
+        lastFix = { lat: here.lat, lon: here.lon };
+        lastFixTime = now;
+        render();
+      }
+    }, function (err) {
+      gpsDot.className = 'gps-dot err';
+      var reason = err.code === 1 ? 'GPS denied' : (err.code === 2 ? 'GPS unavailable' : 'GPS timeout');
+      gpsText.textContent = reason + (manualStart ? ' \u00b7 from ' + manualStart.label : '') + ' \u2014 tap to retry';
+    }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 });
+  }
+  document.querySelector('.gps').addEventListener('click', startGPS);
+  startGPS();
+
+  // ---------- manual start point (fallback when no GPS) ----------
+  window.setStartPoint = function () {
+    var q = prompt('Starting point (address or suburb):', manualStart ? manualStart.label : '');
+    if (!q) return;
+    q = q.trim();
+    if (!q) return;
+    setStatus('Looking up start point\u2026');
+    tryNominatim(q)
+      .then(function (hit) { return hit || tryPhoton(q); })
+      .then(function (hit) {
+        if (hit) {
+          manualStart = { lat: hit.lat, lon: hit.lon, label: q };
+          store.set('runsheet_start', JSON.stringify(manualStart));
+          if (!here) { gpsDot.className = 'gps-dot'; gpsText.textContent = 'From: ' + q; }
+          setStatus('');
+          render();
+        } else {
+          setStatus('Couldn\u2019t find start point "' + q + '" in Victoria.', true);
+        }
+      })
+      .catch(function () { setStatus('Network problem looking up start point.', true); });
+  };
+  if (manualStart && !here) { gpsText.textContent = 'From: ' + manualStart.label; }
+
+  // ---------- actions ----------
+  window.pinJob = function (id) {
+    jobs.forEach(function (x) { x.pinned = (x.id === id); });
+    save(); render();
+  };
+  window.unpinJob = function () {
+    jobs.forEach(function (x) { x.pinned = false; });
+    save(); render();
+  };
+  window.markDone = function (id) {
+    var j = jobs.find(function (x) { return x.id === id; });
+    if (j) { j.status = 'done'; j.pinned = false; save(); render(); }
+  };
+  window.undoDone = function (id) {
+    var j = jobs.find(function (x) { return x.id === id; });
+    if (j) { j.status = 'queued'; save(); render(); }
+  };
+  window.removeJob = function (id) {
+    jobs = jobs.filter(function (x) { return x.id !== id; });
+    save(); render();
+  };
+  window.removeNextJob = function (id) {
+    if (confirm('Remove this job from the run?')) window.removeJob(id);
+  };
+  // ---------- favourites ----------
+  var favs = [];
+  try { favs = JSON.parse(store.get('runsheet_favs') || '[]'); } catch (e) { favs = []; }
+  function saveFavs() { store.set('runsheet_favs', JSON.stringify(favs)); }
+  function favIndexOf(label) {
+    var key = String(label || '').trim().toLowerCase();
+    for (var i = 0; i < favs.length; i++) {
+      if (String(favs[i].label || '').trim().toLowerCase() === key) return i;
+    }
+    return -1;
+  }
+  window.toggleFavNext = function (id) {
+    var j = jobs.find(function (x) { return x.id === id; });
+    if (!j || j.lat == null) return;
+    var i = favIndexOf(j.label);
+    if (i >= 0) { favs.splice(i, 1); }
+    else { favs.push({ label: j.label, lat: j.lat, lon: j.lon, display: j.display || '' }); }
+    saveFavs(); renderFavPanel(); render();
+  };
+  function favInRun(label) {
+    var key = String(label || '').trim().toLowerCase();
+    return jobs.some(function (j) {
+      return j.status === 'queued' && String(j.label || '').trim().toLowerCase() === key;
+    });
+  }
+  window.addFromFav = function (i) {
+    var f = favs[i];
+    if (!f) return;
+    if (favInRun(f.label) && !confirm('"' + f.label + '" is already in your run \u2014 add it again?')) return;
+    jobs.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+                label: f.label, lat: f.lat, lon: f.lon, display: f.display || '',
+                status: 'queued', error: false });
+    save(); render();
+    setStatus('');
+  };
+  window.delFav = function (i) {
+    if (!favs[i]) return;
+    favs.splice(i, 1); saveFavs();
+    lastFavSig = ''; // force panel rebuild
+    renderFavPanel(); render();
+  };
+  var favPanelOpen = false, lastFavSig = '', openFavEl = null;
+  function renderFavPanel() {
+    var fp = document.getElementById('favPanel');
+    if (!fp) return;
+    if (!favPanelOpen) { fp.style.display = 'none'; lastFavSig = ''; openFavEl = null; return; }
+    fp.style.display = 'block';
+    fp.className = 'fav-panel';
+    var sorted = favs.map(function (f, i) { return { f: f, i: i }; });
+    sorted.sort(function (a, b) { return String(a.f.label).toLowerCase().localeCompare(String(b.f.label).toLowerCase()); });
+    var sig = sorted.map(function (x) { return x.f.label + (favInRun(x.f.label) ? '1' : '0'); }).join('|');
+    if (sig === lastFavSig) return; // nothing changed - don't stomp on an in-progress swipe
+    lastFavSig = sig;
+    openFavEl = null;
+    if (!favs.length) {
+      fp.innerHTML = '<div class="fav-empty">No favourites yet \u2014 when a regular address is in the Next Job card, tap its \u2606 to save it here. Swipe a favourite left to delete it.</div>';
+      return;
+    }
+    fp.innerHTML = sorted.map(function (x) {
+      return '<div class="fav-wrap">' +
+        '<button class="fav-del" onclick="delFav(' + x.i + ')">Delete</button>' +
+        '<div class="fav-row">' +
+        '<div style="flex:1;min-width:0"><div class="nm">' + esc(x.f.label) + '</div>' +
+        (x.f.display ? '<div class="sb">' + esc(x.f.display) + '</div>' : '') + '</div>' +
+        (favInRun(x.f.label)
+          ? '<button class="mini" style="background:var(--green);color:#06240f;border-color:var(--green);font-weight:700" onclick="addFromFav(' + x.i + ')">\u2713 In run</button>'
+          : '<button class="mini" style="background:#1E90FF;color:#000;border-color:#1E90FF;font-weight:700" onclick="addFromFav(' + x.i + ')">Add</button>') +
+        '</div></div>';
+    }).join('');
+  }
+  // swipe-left-to-reveal-delete, delegated so listeners survive rebuilds
+  var favSwipe = { el: null, startX: 0, startY: 0, base: 0, off: 0, horiz: null };
+  function closeOpenFav() {
+    if (openFavEl) { openFavEl.style.transform = 'translateX(0)'; openFavEl = null; }
+  }
+  function wireFavSwipe() {
+    var fp = document.getElementById('favPanel');
+    if (!fp || fp._swipeWired) return;
+    fp._swipeWired = true;
+    fp.addEventListener('touchstart', function (e) {
+      var row = e.target && e.target.closest ? e.target.closest('.fav-row') : null;
+      if (!row) return;
+      if (openFavEl && row !== openFavEl) closeOpenFav();
+      favSwipe = { el: row, startX: e.touches[0].clientX, startY: e.touches[0].clientY,
+                   base: (row === openFavEl ? -96 : 0), off: (row === openFavEl ? -96 : 0), horiz: null };
+    }, { passive: true });
+    fp.addEventListener('touchmove', function (e) {
+      if (!favSwipe.el) return;
+      var dx = e.touches[0].clientX - favSwipe.startX;
+      var dy = e.touches[0].clientY - favSwipe.startY;
+      if (favSwipe.horiz === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+        favSwipe.horiz = Math.abs(dx) > Math.abs(dy);
+      }
+      if (favSwipe.horiz === false) { favSwipe.el = null; return; }
+      if (favSwipe.horiz) {
+        favSwipe.off = Math.max(-96, Math.min(0, favSwipe.base + dx));
+        favSwipe.el.style.transition = 'none';
+        favSwipe.el.style.transform = 'translateX(' + favSwipe.off + 'px)';
+      }
+    }, { passive: true });
+    fp.addEventListener('touchend', function () {
+      if (!favSwipe.el || !favSwipe.horiz) { favSwipe.el = null; return; }
+      var el = favSwipe.el;
+      el.style.transition = '';
+      if (favSwipe.off < -48) {
+        el.style.transform = 'translateX(-96px)';
+        openFavEl = el;
+      } else {
+        el.style.transform = 'translateX(0)';
+        if (openFavEl === el) openFavEl = null;
+      }
+      favSwipe.el = null;
+    });
+  }
+  var favBtnEl = document.getElementById('favBtn');
+  if (favBtnEl) favBtnEl.addEventListener('click', function () {
+    favPanelOpen = !favPanelOpen;
+    renderFavPanel();
+    wireFavSwipe();
+  });
+  window.retryJob = function (id) {
+    var j = jobs.find(function (x) { return x.id === id; });
+    if (j) { j.error = false; geocode(j); render(); }
+  };
+  $('clearDoneBtn').addEventListener('click', function () {
+    jobs = jobs.filter(function (x) { return x.status !== 'done'; });
+    save(); render();
+  });
+  $('clearAllBtn').addEventListener('click', function () {
+    if (confirm('Clear all jobs?')) { jobs = []; save(); render(); }
+  });
+
+  var navApps = {
+    google: { name: 'Google Maps', url: function (j) { return 'https://www.google.com/maps/dir/?api=1&destination=' + j.lat + ',' + j.lon; } },
+    waze:   { name: 'Waze',        url: function (j) { return 'https://waze.com/ul?ll=' + j.lat + ',' + j.lon + '&navigate=yes'; } },
+    apple:  { name: 'Apple Maps',  url: function (j) { return 'https://maps.apple.com/?daddr=' + j.lat + ',' + j.lon; } }
+  };
+  var navPref = store.get('runsheet_nav') || 'google';
+  if (!navApps[navPref]) navPref = 'google';
+  function navUrl(j) { return navApps[navPref].url(j); }
+  window.cycleNavApp = function () {
+    var order = ['google', 'waze', 'apple'];
+    navPref = order[(order.indexOf(navPref) + 1) % order.length];
+    store.set('runsheet_nav', navPref);
+    var b = document.getElementById('navPrefBtn');
+    if (b) b.textContent = 'Nav: ' + navApps[navPref].name;
+    render();
+  };
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  // ---------- road distances via OSRM (falls back to straight-line) ----------
+  var routeOrigin = null, routeSig = '', routeBusy = false, routeLast = 0;
+  function maybeRouteUpdate() {
+    var p = posNow();
+    if (!p) return;
+    var targets = jobs.filter(function (j) { return j.status === 'queued' && j.lat != null && !j.error; });
+    if (!targets.length) return;
+    var sig = targets.map(function (j) { return j.id; }).sort().join(',');
+    var moved = !routeOrigin || haversineKm(routeOrigin, p) > 0.25;
+    if (routeBusy) return;
+    if (sig === routeSig && !moved) return;
+    if (sig === routeSig && Date.now() - routeLast < 15000) return;
+    routeBusy = true;
+    var coords = [p.lon + ',' + p.lat].concat(
+      targets.map(function (j) { return j.lon + ',' + j.lat; })).join(';');
+    var url = 'https://router.project-osrm.org/table/v1/driving/' + coords +
+              '?sources=0&annotations=distance,duration';
+    fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res && res.code === 'Ok' && res.distances && res.distances[0]) {
+          targets.forEach(function (j, i) {
+            var m = res.distances[0][i + 1];
+            var s = res.durations && res.durations[0] ? res.durations[0][i + 1] : null;
+            if (m != null) {
+              j._roadKm = m / 1000;
+              j._mins = s != null ? Math.round(s / 60) : null;
+            }
+          });
+          routeOrigin = { lat: p.lat, lon: p.lon };
+          routeSig = sig;
+          routeLast = Date.now();
+          save();
+          render();
+        }
+      })
+      .catch(function () { /* straight-line fallback stays in place */ })
+      .finally(function () { routeBusy = false; });
+  }
+
+  // ---------- Mapbox live-traffic routing (beta) ----------
+  var MAPBOX_TOKEN = 'pk.eyJ1IjoiYW5kcmV3c3RpbnNvbiIsImEiOiJjbXJyMjVmbW4wbDZ3NDhxMHpidWZ0NHA0In0.6bw3fjIXinz61fvsX3hK7g';
+  function mbxRoute(p, j, avoidTolls) {
+    if (!MAPBOX_TOKEN || MAPBOX_TOKEN.indexOf('PASTE') === 0) return Promise.resolve(null);
+    var lbl = avoidTolls ? 'MBX-notoll' : 'MBX-alts';
+    var url = 'https://api.mapbox.com/directions/v5/mapbox/driving-traffic/' +
+              p.lon + ',' + p.lat + ';' + j.lon + ',' + j.lat +
+              '?alternatives=' + (avoidTolls ? 'false' : 'true') +
+              '&geometries=geojson&overview=full' +
+              (avoidTolls ? '&exclude=toll' : '') +
+              '&access_token=' + encodeURIComponent(MAPBOX_TOKEN);
+    return fetch(url)
+      .then(function (r) { tollTrace.push(lbl + ' ' + r.status); return r.json(); })
+      .then(function (res) {
+        if (!res || res.code !== 'Ok' || !res.routes || !res.routes.length) {
+          if (res && res.code && res.code !== 'Ok') tollTrace.push(lbl + ' err:' + res.code);
+          return null;
+        }
+        var routes = res.routes.map(function (rt) {
+          var out = { km: rt.distance / 1000, mins: Math.round(rt.duration / 60), live: true };
+          var coords = rt.geometry && rt.geometry.coordinates;
+          if (coords && coords.length > 2) {
+            var mid = coords[Math.floor(coords.length / 2)];
+            out.via = { lat: mid[1], lon: mid[0] };
+          }
+          return out;
+        });
+        if (!avoidTolls && routes.length) routes[0].alts = routes.slice(1);
+        return routes.length ? routes[0] : null;
+      })
+      .catch(function () { tollTrace.push(lbl + ' net-fail'); return null; });
+  }
+
+  // ---------- toll vs no-toll comparison for the next job ----------
+  // Primary: openrouteservice (needs free key below). Fallback: OSRM exclude=toll.
+  var ORS_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjI1NWE4ODE0MjUwYzQ4MDRhNTA4NjYwMThhNDIyOWRiIiwiaCI6Im11cm11cjY0In0=';
+  function orsFetch(body, label) {
+    return fetch('https://api.openrouteservice.org/v2/directions/driving-car/geojson', {
+      method: 'POST',
+      headers: { 'Authorization': ORS_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+      .then(function (r) { tollTrace.push(label + ' ' + r.status); return r.json(); })
+      .then(function (res) {
+        var feats = res && res.features;
+        if (!feats || !feats.length) {
+          if (res && res.error) tollTrace.push(label + ' err:' + (res.error.code || res.error.message || 'unknown'));
+          return null;
+        }
+        var routes = feats.map(function (f) {
+          if (!f.properties || !f.properties.summary) return null;
+          var out = { km: f.properties.summary.distance / 1000,
+                      mins: Math.round(f.properties.summary.duration / 60) };
+          var coords = f.geometry && f.geometry.coordinates;
+          if (coords && coords.length > 2) {
+            var mid = coords[Math.floor(coords.length / 2)];
+            out.via = { lat: mid[1], lon: mid[0] };
+          }
+          return out;
+        }).filter(Boolean);
+        return routes.length ? routes : null;
+      })
+      .catch(function () { return null; });
+  }
+  function orsRoute(p, j, avoidTolls) {
+    if (!ORS_KEY || ORS_KEY.indexOf('PASTE') === 0) return Promise.resolve(null);
+    var base = { coordinates: [[p.lon, p.lat], [j.lon, j.lat]] };
+    if (avoidTolls) {
+      base.options = { avoid_features: ['tollways'] };
+      return orsFetch(base, 'ORS-notoll').then(function (rs) { return rs ? rs[0] : null; });
+    }
+    // Try for alternative routes first; if that request fails for any reason,
+    // fall back to a plain single-route request so the comparison still works.
+    var withAlts = { coordinates: base.coordinates,
+                     alternative_routes: { target_count: 3, share_factor: 0.6, weight_factor: 1.6 } };
+    return orsFetch(withAlts, 'ORS-alts').then(function (rs) {
+      if (rs && rs.length) {
+        rs[0].alts = rs.slice(1);
+        return rs[0];
+      }
+      return orsFetch(base, 'ORS-plain').then(function (rs2) { return rs2 ? rs2[0] : null; });
+    });
+  }
+  var tollJobId = null, tollOrigin = null, tollBusy = false, tollTrace = [];
+  function fetchRoute(p, j, excludeToll) {
+    var lbl = excludeToll ? 'OSRM-notoll' : 'OSRM';
+    var url = 'https://router.project-osrm.org/route/v1/driving/' +
+              p.lon + ',' + p.lat + ';' + j.lon + ',' + j.lat +
+              '?overview=false' + (excludeToll ? '&exclude=toll' : '');
+    return fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res && res.code === 'Ok' && res.routes && res.routes[0]) {
+          tollTrace.push(lbl + ' ok');
+          return { km: res.routes[0].distance / 1000, mins: Math.round(res.routes[0].duration / 60) };
+        }
+        tollTrace.push(lbl + ' ' + (res && res.code ? res.code : 'fail'));
+        return null;
+      })
+      .catch(function () { tollTrace.push(lbl + ' net-fail'); return null; });
+  }
+  function shiftPoint(from, toward, km) {
+    var dist = haversineKm(from, toward);
+    var t = Math.min(0.45, km / Math.max(dist, 0.1));
+    return { lat: from.lat + (toward.lat - from.lat) * t,
+             lon: from.lon + (toward.lon - from.lon) * t };
+  }
+  function tryVariants(variants, idx) {
+    if (idx >= variants.length) return Promise.resolve(null);
+    var v = variants[idx];
+    return fetchRoute(v.from, v.to, true).then(function (r2) {
+      if (r2) { r2.approx = true; return r2; }
+      return tryVariants(variants, idx + 1);
+    });
+  }
+  function maybeTollUpdate(next) {
+    var p = posNow();
+    if (!p || !next || next.lat == null) return;
+    var moved = !tollOrigin || haversineKm(tollOrigin, p) > 0.25;
+    if (tollBusy) return;
+    if (next.id === tollJobId && !moved) return;
+    tollBusy = true;
+    tollTrace = [];
+    var haveOrs = ORS_KEY && ORS_KEY.indexOf('PASTE') !== 0;
+    var haveMbx = MAPBOX_TOKEN && MAPBOX_TOKEN.indexOf('PASTE') !== 0;
+    if (!haveMbx) tollTrace.push('no Mapbox token set');
+    var pair = haveMbx
+      ? Promise.all([mbxRoute(p, next, false), mbxRoute(p, next, true)])
+      : (haveOrs
+        ? Promise.all([orsRoute(p, next, false), orsRoute(p, next, true)])
+        : Promise.all([fetchRoute(p, next, false), fetchRoute(p, next, true)]));
+    pair
+      .then(function (r) {
+        // Mapbox failed entirely -> try ORS pair before OSRM
+        if (haveMbx && !r[0] && haveOrs) {
+          return Promise.all([orsRoute(p, next, false), orsRoute(p, next, true)]);
+        }
+        return r;
+      })
+      .then(function (r) {
+        // Mapbox main ok but its no-toll leg failed -> let ORS fill the no-toll slot
+        if (r[0] && !r[1] && haveMbx && haveOrs) {
+          return orsRoute(p, next, true).then(function (nt) { return [r[0], nt]; });
+        }
+        return r;
+      })
+      .then(function (r) {
+        if ((haveOrs || haveMbx) && !r[0]) {
+          // ORS didn't answer (outage/quota/network) — fall back to OSRM this round
+          return Promise.all([fetchRoute(p, next, false), fetchRoute(p, next, true)]);
+        }
+        return r;
+      })
+      .then(function (r) {
+        if (r[0] && !r[1]) {
+          // No toll-free result: nudge the ends clear of toll-tagged roads.
+          var variants = [
+            { from: p, to: shiftPoint(next, p, 0.5) },
+            { from: p, to: shiftPoint(next, p, 2) },
+            { from: p, to: shiftPoint(next, p, 6) },
+            { from: shiftPoint(p, next, 0.5), to: next },
+            { from: shiftPoint(p, next, 2), to: next },
+            { from: shiftPoint(p, next, 2), to: shiftPoint(next, p, 2) }
+          ];
+          return tryVariants(variants, 0).then(function (r2) {
+            return [r[0], r2];
+          });
+        }
+        return r;
+      })
+      .then(function (r) {
+        if (r[0]) {
+          next._tollRoute = r[0];
+          next._noTollRoute = r[1];
+          // Pick a genuinely different alternative (not a near-duplicate of the
+          // primary or the no-toll route) if ORS offered one.
+          next._altRoute = null;
+          var alts = r[0].alts || [];
+          function similar(a, b) {
+            return a && b && Math.abs(a.km - b.km) < 0.3 && Math.abs(a.mins - b.mins) < 1;
+          }
+          for (var ai = 0; ai < alts.length; ai++) {
+            if (!similar(alts[ai], r[0]) && !similar(alts[ai], r[1])) {
+              next._altRoute = alts[ai];
+              break;
+            }
+          }
+          tollJobId = next.id;
+          tollOrigin = { lat: p.lat, lon: p.lon };
+          save(); // persist routes so a reloaded tab shows them instantly
+          render();
+        }
+      })
+      .finally(function () { tollBusy = false; });
+  }
+
+  // ---------- render ----------
+  function render() {
+    var queued = jobs.filter(function (j) { return j.status === 'queued'; });
+    var done = jobs.filter(function (j) { return j.status === 'done'; });
+
+    // compute distances: road distance when we have it (counted down by how far
+    // we've travelled since it was fetched), straight-line otherwise
+    var p = posNow();
+    var travelled = (p && routeOrigin) ? haversineKm(routeOrigin, p) : 0;
+    queued.forEach(function (j) {
+      var straight = (p && j.lat != null) ? haversineKm(p, j) : null;
+      if (j._roadKm != null && straight != null) {
+        j._km = Math.max(straight, j._roadKm - travelled);
+      } else {
+        j._km = (j._roadKm != null) ? j._roadKm : straight;
+      }
+    });
+    // located jobs sorted by distance first, then pending lookups, then errors
+    queued.sort(function (a, b) {
+      if (a.error !== b.error) return a.error ? 1 : -1;
+      if ((a._km == null) !== (b._km == null)) return a._km == null ? 1 : -1;
+      return (a._km || 0) - (b._km || 0);
+    });
+
+    var pinned = queued.find(function (j) { return j.pinned && !j.error && j.lat != null; });
+    var next = pinned || (queued.length && !queued[0].error && queued[0].lat != null ? queued[0] : null);
+    var rest = next ? queued.filter(function (j) { return j.id !== next.id; }) : queued;
+
+    // next card
+    var nw = $('nextWrap');
+    if (next) {
+      var d = fmtDist(next._km);
+      var tollLine = '';
+      if (next._tollRoute) {
+        var t = next._tollRoute, n = next._noTollRoute, alt = next._altRoute;
+        if (!n && !alt) {
+          tollLine = '<div class="sub" style="margin-top:-8px">Toll-free comparison unavailable for this destination</div>';
+        } else if (n && !alt && !n.approx && Math.abs(t.mins - n.mins) < 1 && Math.abs(t.km - n.km) < 0.3) {
+          tollLine = '<div class="sub" style="margin-top:-8px">No toll roads on this route</div>';
+        } else {
+          var rows = '<span style="color:var(--amber)">Fastest:</span> ' +
+                     t.km.toFixed(1) + ' km \u00b7 ' + t.mins + ' min' +
+                     (t.live ? ' <span style="color:var(--green)">live</span>' : '');
+          if (alt) {
+            rows += '<br><span style="color:var(--amber)">Alt route:</span> ' +
+                    alt.km.toFixed(1) + ' km \u00b7 ' + alt.mins + ' min';
+          }
+          if (n) {
+            rows += '<br><span style="color:var(--amber)">No tolls:</span> ' + (n.approx ? '\u2248' : '') +
+                    n.km.toFixed(1) + ' km \u00b7 ' + (n.approx ? '\u2248' : '') + n.mins + ' min';
+          } else {
+            rows += '<br><span style="color:var(--amber)">No tolls:</span> unavailable';
+          }
+          tollLine = '<div class="sub" style="margin-top:-8px;line-height:1.7">' + rows + '</div>';
+        }
+      }
+      if (tollTrace.length) {
+        tollLine += '<div class="sub" style="margin-top:-6px;font-size:10px;opacity:0.7">route check: ' +
+                    esc(tollTrace.join(' \u00b7 ')) + '</div>';
+      }
+      var routesDiffer = next._tollRoute && next._noTollRoute &&
+          !(Math.abs(next._tollRoute.mins - next._noTollRoute.mins) < 1 &&
+            Math.abs(next._tollRoute.km - next._noTollRoute.km) < 0.3);
+      function viaUrl(route) {
+        return 'https://www.google.com/maps/dir/?api=1&destination=' +
+               next.lat + ',' + next.lon +
+               (route && route.via ? '&waypoints=' + route.via.lat + ',' + route.via.lon : '') +
+               '&travelmode=driving';
+      }
+      var navBtns, altBtnRow = '';
+      if ((routesDiffer && next._noTollRoute.via) || next._altRoute) {
+        navBtns = '<a class="btn btn-nav" href="' + navUrl(next) + '" target="runsheet_nav" rel="noopener">Fastest</a>';
+        if (next._altRoute && next._altRoute.via) {
+          navBtns += '<a class="btn btn-nav" href="' + viaUrl(next._altRoute) + '" target="runsheet_nav" rel="noopener">Alt</a>';
+        }
+        if (routesDiffer && next._noTollRoute.via) {
+          navBtns += '<a class="btn btn-nav" href="' + viaUrl(next._noTollRoute) + '" target="runsheet_nav" rel="noopener">No&nbsp;Tolls</a>';
+        }
+        altBtnRow = '<div class="btn-row">' + navBtns + '</div>' +
+                    '<div class="btn-row" style="margin-top:8px">' +
+                      '<button class="btn btn-done" onclick="markDone(\'' + next.id + '\')">Delivered</button>' +
+                    '</div>';
+      } else {
+        altBtnRow = '<div class="btn-row">' +
+                      '<a class="btn btn-nav" href="' + navUrl(next) + '" target="runsheet_nav" rel="noopener">Navigate</a>' +
+                      '<button class="btn btn-done" onclick="markDone(\'' + next.id + '\')">Delivered</button>' +
+                    '</div>';
+      }
+      nw.innerHTML =
+        '<div class="next-card">' +
+          '<div class="eyebrow" style="display:flex;justify-content:space-between;align-items:center">' +
+            '<span>Next job' + (pinned ? ' \u00b7 your pick' : '') + '</span>' +
+            '<span style="display:flex;gap:6px">' +
+            (pinned ? '<button onclick="unpinJob()" style="background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 8px;cursor:pointer;letter-spacing:normal;text-transform:none;font-family:var(--body)">Back to nearest</button>' : '') +
+            '<button onclick="toggleFavNext(\'' + next.id + '\')" title="Save to favourites" style="background:none;border:1px solid var(--line);border-radius:6px;color:' + (favIndexOf(next.label) >= 0 ? 'var(--amber)' : 'var(--muted)') + ';font-size:12px;padding:4px 9px;cursor:pointer;letter-spacing:normal;text-transform:none;font-family:var(--body)">' + (favIndexOf(next.label) >= 0 ? '\u2605' : '\u2606') + '</button>' +
+            '<button onclick="removeNextJob(\'' + next.id + '\')" title="Remove this job" style="background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer;letter-spacing:normal;text-transform:none;font-family:var(--body)">\u2715</button>' +
+            '</span>' +
+          '</div>' +
+          '<div class="addr">' + esc(next.label) + '</div>' +
+          (next.display ? '<div class="sub">' + esc(next.display) + '</div>' : '') +
+          '<div class="dist">' + d.n + '<small>' + d.u +
+            (next._mins != null ? ' \u00b7 ' + next._mins + ' min' : (posNow() ? ' away' : '')) + '</small></div>' +
+          tollLine +
+          altBtnRow +
+        '</div>';
+    } else {
+      nw.innerHTML = '';
+    }
+
+    // queue list
+    var ql = $('queueList');
+    ql.innerHTML = rest.map(function (j) {
+      var d = fmtDist(j._km);
+      var cls = 'job' + (j.lat == null && !j.error ? ' pending-geo' : '');
+      var sub = j.error ? 'Address not found' : (j.lat == null ? 'Looking up\u2026' : (j.display || ''));
+      var actions = j.error
+        ? '<button class="mini" onclick="retryJob(\'' + j.id + '\')">Retry</button>' +
+          '<button class="mini" onclick="removeJob(\'' + j.id + '\')">Remove</button>'
+        : '<button class="mini" style="color:var(--amber);border-color:var(--amber-dim)" onclick="pinJob(\'' + j.id + '\')">Next</button>' +
+          '<button class="mini" onclick="removeJob(\'' + j.id + '\')">\u2715</button>';
+      return '<div class="' + cls + '">' +
+        '<div class="info"><div class="addr">' + esc(j.label) + '</div>' +
+        '<div class="sub">' + esc(sub) + '</div></div>' +
+        '<div class="dist">' + d.n + '<small>' + d.u + '</small></div>' +
+        actions + '</div>';
+    }).join('');
+
+    $('queueLabel').style.display = rest.length ? 'flex' : 'none';
+    $('queueCount').textContent = rest.length + ' more';
+    $('emptyState').style.display = jobs.length ? 'none' : 'block';
+
+    // done list
+    var dl = $('doneList');
+    dl.innerHTML = done.map(function (j) {
+      return '<div class="job done">' +
+        '<div class="info"><div class="addr">' + esc(j.label) + '</div></div>' +
+        '<button class="mini" onclick="undoDone(\'' + j.id + '\')">Undo</button>' +
+        '<button class="mini" onclick="removeJob(\'' + j.id + '\')">\u2715</button></div>';
+    }).join('');
+    $('doneLabel').style.display = done.length ? 'flex' : 'none';
+    $('doneCount').textContent = done.length;
+    renderFavPanel();
+
+    // refresh road distances if we've moved or the job list changed
+    setTimeout(maybeRouteUpdate, 0);
+    setTimeout(function () { maybeTollUpdate(next); }, 0);
+    if (mbMap && mapVisible()) {
+      refreshMapMarkers(false);
+      if (mapFollow) engageFollow();
+    }
+  }
+
+  // ---------- voice input (mic button, where the browser supports it) ----------
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var micBtn = $('micBtn');
+  if (SR && micBtn) {
+    micBtn.style.display = 'block';
+    var listening = false, rec = null;
+    micBtn.addEventListener('click', function () {
+      if (listening && rec) { rec.stop(); return; }
+      rec = new SR();
+      rec.lang = 'en-AU';
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      listening = true;
+      micBtn.style.color = 'var(--red)';
+      setStatus('Listening\u2026 say the address');
+      rec.onresult = function (e) {
+        var text = e.results[0][0].transcript;
+        if (text && text.trim()) addAddresses(text.trim());
+      };
+      rec.onerror = function () { setStatus('Didn\u2019t catch that \u2014 tap the mic and try again.', true); };
+      rec.onend = function () {
+        listening = false;
+        micBtn.style.color = 'var(--amber)';
+        if (statusMsg.textContent.indexOf('Listening') === 0) setStatus('');
+      };
+      rec.start();
+    });
+  }
+
+  // ---------- accept an address via the URL (?add=...) for Siri Shortcuts ----------
+  try {
+    var params = new URLSearchParams(location.search);
+    var incoming = params.get('add');
+    if (incoming && incoming.trim()) {
+      addAddresses(incoming.trim());
+      history.replaceState(null, '', location.pathname);
+    }
+  } catch (e) { /* older browsers: ignore */ }
+
+  // ---------- multi-tab handling: keep copies in sync, flag stale tabs ----------
+  function reloadFromStorage() {
+    try {
+      var fresh = JSON.parse(store.get('runsheet_jobs') || '[]');
+      // Carry over live route/toll data (never saved to storage) by job id,
+      // so returning from another app doesn't blank the card.
+      fresh.forEach(function (nj) {
+        var old = jobs.find(function (o) { return o.id === nj.id; });
+        if (old) {
+          nj._tollRoute = old._tollRoute;
+          nj._noTollRoute = old._noTollRoute;
+          nj._altRoute = old._altRoute;
+          nj._roadKm = old._roadKm;
+          nj._mins = old._mins;
+        }
+      });
+      jobs = fresh;
+      render();
+    } catch (e) { /* keep current state */ }
+  }
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'runsheet_jobs') reloadFromStorage();
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) {
+      // Traffic moved on while we were away - refetch live times for the next job
+      tollJobId = null;
+      reloadFromStorage();
+    }
+  });
+  try {
+    var bc = new BroadcastChannel('runsheet');
+    bc.postMessage('new-instance');
+    bc.onmessage = function (e) {
+      if (e.data === 'new-instance') {
+        var banner = document.createElement('div');
+        banner.style.cssText = 'background:var(--red);color:#fff;text-align:center;' +
+          'padding:10px;border-radius:10px;margin-bottom:10px;font-size:13px;font-weight:600';
+        banner.textContent = 'RunSheet is open in a newer tab \u2014 close this one.';
+        document.body.insertBefore(banner, document.body.firstChild);
+      }
+    };
+  } catch (e) { /* BroadcastChannel unsupported: sync above still applies */ }
+
+  render();
+  var npb = document.getElementById('navPrefBtn');
+  if (npb) npb.textContent = 'Nav: ' + navApps[navPref].name;
+  // re-geocode anything that was saved mid-lookup
+  jobs.forEach(function (j) { if (j.lat == null && !j.error && j.status === 'queued') geocode(j); });
+})();
+</script>
+</body>
+</html>
