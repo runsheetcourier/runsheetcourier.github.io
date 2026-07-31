@@ -194,7 +194,7 @@
 </div>
 <div id="setPanel"></div>
 
-<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Build 825</p>
+<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Build 826</p>
 
 <script>
 (function () {
@@ -1270,7 +1270,7 @@
       return orsFetch(base, 'ORS-plain').then(function (rs2) { return rs2 ? rs2[0] : null; });
     });
   }
-  var tollJobId = null, tollOrigin = null, tollBusy = false, tollTrace = [];
+  var tollJobId = null, tollOrigin = null, tollBusy = false, tollTrace = [], tollFetchedAt = 0, tollTimer = null;
   function fetchRoute(p, j, excludeToll) {
     var lbl = excludeToll ? 'OSRM-notoll' : 'OSRM';
     var url = 'https://router.project-osrm.org/route/v1/driving/' +
@@ -1375,6 +1375,7 @@
             }
           }
           tollJobId = next.id;
+          tollFetchedAt = Date.now();
           tollOrigin = { lat: p.lat, lon: p.lon };
           save(); // persist routes so a reloaded tab shows them instantly
           render();
@@ -1382,6 +1383,31 @@
       })
       .finally(function () { tollBusy = false; });
   }
+
+  // ---------- live-time refresh ----------
+  var LIVE_REFRESH_MS = 90000;
+  function liveAge() {
+    if (!tollFetchedAt) return '';
+    var secs = Math.round((Date.now() - tollFetchedAt) / 1000);
+    if (secs < 15) return ' \u00b7 now';
+    if (secs < 120) return ' \u00b7 ' + secs + 's';
+    return ' \u00b7 ' + Math.round(secs / 60) + 'm';
+  }
+  function refreshLiveTimes() {
+    if (document.hidden) return;              // asleep in a pocket: spend nothing
+    if (tollBusy) return;
+    if (!posNow()) return;
+    if (Date.now() - tollFetchedAt < LIVE_REFRESH_MS - 1000) return;
+    var queued = jobs.filter(function (j) { return j.status === 'queued' && j.lat != null && !j.error; });
+    if (!queued.length) return;
+    tollJobId = null;                          // force a fresh fetch for the current next job
+    render();
+  }
+  function startLiveTimer() {
+    if (tollTimer) return;
+    tollTimer = setInterval(refreshLiveTimes, 15000);  // check often, refetch on the 90s cadence
+  }
+  startLiveTimer();
 
   // ---------- settings: bring your own Mapbox key ----------
   var setPanelOpen = false;
@@ -1512,7 +1538,7 @@
         } else {
           var rows = '<span style="color:var(--amber)">Fastest:</span> ' +
                      t.km.toFixed(1) + ' km \u00b7 ' + t.mins + ' min' +
-                     (t.live ? ' <span style="color:var(--green)">live</span>' : '');
+                     (t.live ? ' <span style="color:var(--green)">live' + liveAge() + '</span>' : ' <span style="color:var(--muted)">est.</span>');
           if (alt) {
             rows += '<br><span style="color:var(--amber)">Alt route:</span> ' +
                     alt.km.toFixed(1) + ' km \u00b7 ' + alt.mins + ' min';
@@ -1589,7 +1615,7 @@
               '</div>'
             : '') +
           '<div class="dist">' + d.n + '<small>' + d.u +
-            (next._mins != null ? ' \u00b7 ' + next._mins + ' min' : (posNow() ? ' away' : '')) + '</small></div>' +
+            (next._mins != null ? ' \u00b7 ' + next._mins + ' min est.' : (posNow() ? ' away' : '')) + '</small></div>' +
           tollLine +
           altBtnRow +
         '</div>';
@@ -1704,6 +1730,10 @@
   window.addEventListener('storage', function (e) {
     if (e.key === 'runsheet_jobs') reloadFromStorage();
   });
+  setInterval(function () {
+    // repaint just often enough for the age stamp to stay honest
+    if (!document.hidden && tollFetchedAt && !tollBusy) render();
+  }, 30000);
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) {
       // Traffic moved on while we were away - refetch live times for the next job
