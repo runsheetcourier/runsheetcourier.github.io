@@ -76,6 +76,17 @@
   .btn-nav { background: var(--surface-2); color: var(--text); border: 1px solid var(--line); }
   .btn-done { background: var(--green); color: #06240f; }
   .btn-call { background: #1E90FF; color: #000; font-weight: 700; }
+  .prio-chip { border: 1px solid var(--line); background: none; color: var(--muted); border-radius: 6px; font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; padding: 5px 10px; cursor: pointer; }
+  .prio-chip.E { background: var(--red); color: #2a0606; border-color: var(--red); }
+  .prio-chip.D { background: var(--amber); color: #1a1408; border-color: var(--amber); }
+  .prio-chip.G { background: var(--green); color: #06240f; border-color: var(--green); }
+  .job.pE { border-left: 5px solid var(--red); }
+  .job.pD { border-left: 5px solid var(--amber); }
+  .job.pG { border-left: 5px solid var(--green); }
+  .mini.prio { font-family: var(--display); font-weight: 700; letter-spacing: 0.08em; padding: 8px 9px; }
+  .mini.prio.E { background: var(--red); color: #2a0606; border-color: var(--red); }
+  .mini.prio.D { background: var(--amber); color: #1a1408; border-color: var(--amber); }
+  .mini.prio.G { background: var(--green); color: #06240f; border-color: var(--green); }
   .next-card .contact { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 10px; overflow-wrap: anywhere; }
   .next-card .contact a { color: #5FB0FF; text-decoration: none; }
   .next-card .contact .lbl { color: var(--muted); font-weight: 500; font-size: 12px; }
@@ -161,7 +172,7 @@
   <button id="clearAllBtn">Clear all</button>
 </div>
 
-<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Build 821</p>
+<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Build 822</p>
 
 <script>
 (function () {
@@ -867,6 +878,24 @@
     if (p.indexOf('+') > 0) p = p.replace(/\+/g, '');
     return 'tel:' + p;
   }
+  // ---------- run type: Express / Direct / General ----------
+  var PRIO_ORDER = ['E', 'D', 'G'];
+  var PRIO_NAME = { E: 'Express', D: 'Direct', G: 'General' };
+  function prioRank(j) {
+    // Express first, then Direct; General and unmarked share the bottom rank
+    if (j.prio === 'E') return 0;
+    if (j.prio === 'D') return 1;
+    return 2;
+  }
+  window.cyclePrio = function (id) {
+    var j = jobs.find(function (x) { return x.id === id; });
+    if (!j) return;
+    var i = PRIO_ORDER.indexOf(j.prio);
+    if (i === -1) { j.prio = 'E'; }
+    else if (i === PRIO_ORDER.length - 1) { delete j.prio; }
+    else { j.prio = PRIO_ORDER[i + 1]; }
+    save(); render();
+  };
   window.editContact = function (id) {
     var j = jobs.find(function (x) { return x.id === id; });
     if (!j) return;
@@ -1301,10 +1330,13 @@
         j._km = (j._roadKm != null) ? j._roadKm : straight;
       }
     });
-    // located jobs sorted by distance first, then pending lookups, then errors
+    // Express first, then Direct, then General/unmarked - nearest first within each type.
+    // Pending lookups after located jobs; errors last.
     queued.sort(function (a, b) {
       if (a.error !== b.error) return a.error ? 1 : -1;
       if ((a._km == null) !== (b._km == null)) return a._km == null ? 1 : -1;
+      var pr = prioRank(a) - prioRank(b);
+      if (pr !== 0) return pr;
       return (a._km || 0) - (b._km || 0);
     });
 
@@ -1377,10 +1409,15 @@
                     '</div>' +
                     (callBtn ? '<div class="btn-row" style="margin-top:8px">' + callBtn + '</div>' : '');
       }
+      var prioColour = next.prio === 'E' ? 'var(--red)' : (next.prio === 'D' ? 'var(--amber)' : (next.prio === 'G' ? 'var(--green)' : ''));
       nw.innerHTML =
-        '<div class="next-card">' +
+        '<div class="next-card"' + (prioColour ? ' style="border-color:' + prioColour + '"' : '') + '>' +
           '<div class="eyebrow" style="display:flex;justify-content:space-between;align-items:center">' +
-            '<span>Next job' + (pinned ? ' \u00b7 your pick' : '') + '</span>' +
+            '<span style="display:flex;gap:8px;align-items:center">' +
+              '<span>Next job' + (pinned ? ' \u00b7 your pick' : '') + '</span>' +
+              '<button class="prio-chip' + (next.prio ? ' ' + next.prio : '') + '" onclick="cyclePrio(\'' + next.id + '\')" title="Run type">' +
+                (next.prio ? PRIO_NAME[next.prio] : 'Type') + '</button>' +
+            '</span>' +
             '<span style="display:flex;gap:6px">' +
             (pinned ? '<button onclick="unpinJob()" style="background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 8px;cursor:pointer;letter-spacing:normal;text-transform:none;font-family:var(--body)">Back to nearest</button>' : '') +
             '<button onclick="editContact(\'' + next.id + '\')" title="Contact name and phone" style="background:none;border:1px solid var(--line);border-radius:6px;color:' + (next.contact ? 'var(--amber)' : 'var(--muted)') + ';font-size:12px;padding:4px 9px;cursor:pointer;letter-spacing:normal;text-transform:none;font-family:var(--body)">\u270E</button>' +
@@ -1410,13 +1447,14 @@
     var ql = $('queueList');
     ql.innerHTML = rest.map(function (j) {
       var d = fmtDist(j._km);
-      var cls = 'job' + (j.lat == null && !j.error ? ' pending-geo' : '');
+      var cls = 'job' + (j.lat == null && !j.error ? ' pending-geo' : '') + (j.prio ? ' p' + j.prio : '');
       var sub = j.error ? 'Address not found' : (j.lat == null ? 'Looking up\u2026' : (j.display || ''));
       if (j.contact && j.contact.name) sub = j.contact.name + (sub ? ' \u00b7 ' + sub : '');
       var actions = j.error
         ? '<button class="mini" onclick="retryJob(\'' + j.id + '\')">Retry</button>' +
           '<button class="mini" onclick="removeJob(\'' + j.id + '\')">Remove</button>'
-        : '<button class="mini" style="color:var(--amber);border-color:var(--amber-dim)" onclick="pinJob(\'' + j.id + '\')">Next</button>' +
+        : '<button class="mini prio' + (j.prio ? ' ' + j.prio : '') + '" onclick="cyclePrio(\'' + j.id + '\')" title="Run type">' + (j.prio || '\u2013') + '</button>' +
+          '<button class="mini" style="color:var(--amber);border-color:var(--amber-dim)" onclick="pinJob(\'' + j.id + '\')">Next</button>' +
           '<button class="mini" onclick="removeJob(\'' + j.id + '\')">\u2715</button>';
       return '<div class="' + cls + '">' +
         '<div class="info"><div class="addr">' + esc(j.label) + '</div>' +
