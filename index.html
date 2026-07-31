@@ -57,6 +57,9 @@
   .fav-row .nm { flex: 1; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
   .fav-row .sb { font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
   .fav-empty { padding: 16px 14px; font-size: 13px; color: var(--muted); }
+  .fav-tools { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
+  .fav-tools button { flex: 1; background: none; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 12px; padding: 10px 6px; cursor: pointer; }
+  .fav-tools button.hi { color: #5FB0FF; border-color: #2D5F8A; }
   .hint { font-size: 12px; color: var(--muted); margin: 0 2px 16px; }
   .status-msg { font-size: 13px; margin: 0 2px 12px; color: var(--amber); min-height: 16px; }
   .status-msg.error { color: var(--red); }
@@ -121,8 +124,11 @@
   .me-recenter { position: absolute; right: 10px; bottom: 26px; z-index: 5; width: 44px; height: 44px; border-radius: 50%; background: var(--surface); color: #1e88ff; border: 1px solid var(--line); font-size: 24px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
   .me-recenter.follow { border-color: var(--amber); color: var(--amber); box-shadow: 0 0 0 2px var(--amber-dim), 0 2px 8px rgba(0,0,0,0.4); }
   .mapboxgl-popup-content { color: #000 !important; font-size: 13px; font-weight: 600; line-height: 1.4; }
-  .job-pin { width: 27px; height: 27px; border-radius: 50%; background: var(--amber); color: #241a00; font-family: var(--display); font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.45); cursor: pointer; }
-  .job-pin.next { background: var(--green); color: #06240f; }
+  .job-pin { width: 27px; height: 27px; border-radius: 50%; background: #E8ECF0; color: #14181D; font-family: var(--display); font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.45); cursor: pointer; }
+  .job-pin.E { background: var(--red); color: #2a0606; }
+  .job-pin.D { background: var(--amber); color: #241a00; }
+  .job-pin.G { background: var(--green); color: #06240f; }
+  .job-pin.next { width: 32px; height: 32px; font-size: 16px; border-width: 3px; box-shadow: 0 0 0 3px rgba(255,255,255,0.45), 0 1px 5px rgba(0,0,0,0.5); }
   .job-pin.done { background: var(--surface-2); color: var(--muted); border-color: var(--line); opacity: 0.8; }
   .me-pin { width: 16px; height: 16px; border-radius: 50%; background: #1e88ff; border: 3px solid #fff; box-shadow: 0 0 0 3px rgba(30,136,255,0.35); }
   .fuel-toggle { position: absolute; right: 10px; bottom: 78px; z-index: 5; width: 44px; height: 44px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); font-size: 20px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
@@ -172,7 +178,7 @@
   <button id="clearAllBtn">Clear all</button>
 </div>
 
-<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Build 822</p>
+<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Build 824</p>
 
 <script>
 (function () {
@@ -718,15 +724,18 @@
     var queued = jobs.filter(function (j) { return j.status === 'queued' && j.lat != null; });
     queued.sort(function (a, b) {
       if ((a._km == null) !== (b._km == null)) return a._km == null ? 1 : -1;
+      var pr = prioRank(a) - prioRank(b);
+      if (pr !== 0) return pr;
       return (a._km || 0) - (b._km || 0);
     });
     var pinnedJob = queued.find(function (j) { return j.pinned; });
     if (pinnedJob) queued = [pinnedJob].concat(queued.filter(function (j) { return j.id !== pinnedJob.id; }));
     queued.forEach(function (j, i) {
       var el = document.createElement('div');
-      el.className = 'job-pin' + (i === 0 ? ' next' : '');
+      el.className = 'job-pin' + (j.prio ? ' ' + j.prio : '') + (i === 0 ? ' next' : '');
       el.textContent = (i + 1);
-      addPin(el, j.lon, j.lat, j.display || j.label);
+      addPin(el, j.lon, j.lat,
+             (j.prio ? PRIO_NAME[j.prio] + ' \u00b7 ' : '') + (j.display || j.label));
     });
     jobs.filter(function (j) { return j.status === 'done' && j.lat != null; }).forEach(function (j) {
       var el = document.createElement('div');
@@ -961,14 +970,53 @@
   window.delFav = function (i) {
     if (!favs[i]) return;
     favs.splice(i, 1); saveFavs();
-    lastFavSig = ''; // force panel rebuild
+    lastFavSig = null; // force panel rebuild
     renderFavPanel(); render();
   };
-  var favPanelOpen = false, lastFavSig = '', openFavEl = null;
+  var favPanelOpen = false, lastFavSig = null, openFavEl = null;
+  window.exportFavs = function () {
+    if (!favs.length) { setStatus('No favourites to copy yet.', true); return; }
+    var text = JSON.stringify(favs);
+    function fallback() {
+      prompt('Copy this text, then paste it into Import on the other device or browser:', text);
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          setStatus(favs.length + ' favourites copied \u2014 paste into Import on the other browser.');
+        }, fallback);
+      } else { fallback(); }
+    } catch (e) { fallback(); }
+  };
+  window.importFavs = function () {
+    var text = prompt('Paste the favourites text you copied:', '');
+    if (text === null) return;
+    text = String(text).trim();
+    if (!text) return;
+    var incoming;
+    try { incoming = JSON.parse(text); } catch (e) { incoming = null; }
+    if (!incoming || !incoming.length) {
+      setStatus('That text didn\u2019t look like favourites \u2014 copy the whole line and try again.', true);
+      return;
+    }
+    var added = 0, skipped = 0;
+    incoming.forEach(function (f) {
+      if (!f || !f.label || f.lat == null || f.lon == null) return;
+      if (favIndexOf(f.label) >= 0) { skipped++; return; }
+      var nf = { label: f.label, lat: f.lat, lon: f.lon, display: f.display || '' };
+      if (f.contact) nf.contact = { name: f.contact.name || '', phone: f.contact.phone || '' };
+      favs.push(nf);
+      added++;
+    });
+    saveFavs();
+    lastFavSig = null;
+    renderFavPanel(); render();
+    setStatus(added + ' favourites added' + (skipped ? ', ' + skipped + ' already here' : '') + '.');
+  };
   function renderFavPanel() {
     var fp = document.getElementById('favPanel');
     if (!fp) return;
-    if (!favPanelOpen) { fp.style.display = 'none'; lastFavSig = ''; openFavEl = null; return; }
+    if (!favPanelOpen) { fp.style.display = 'none'; lastFavSig = null; openFavEl = null; return; }
     fp.style.display = 'block';
     fp.className = 'fav-panel';
     var sorted = favs.map(function (f, i) { return { f: f, i: i }; });
@@ -977,8 +1025,12 @@
     if (sig === lastFavSig) return; // nothing changed - don't stomp on an in-progress swipe
     lastFavSig = sig;
     openFavEl = null;
+    var toolsRow = '<div class="fav-tools">' +
+      '<button onclick="exportFavs()">Copy all (backup)</button>' +
+      '<button class="hi" onclick="importFavs()">Paste in</button>' +
+      '</div>';
     if (!favs.length) {
-      fp.innerHTML = '<div class="fav-empty">No favourites yet \u2014 when a regular address is in the Next Job card, tap its \u2606 to save it here. Swipe a favourite left to delete it.</div>';
+      fp.innerHTML = '<div class="fav-empty">No favourites yet \u2014 when a regular address is in the Next Job card, tap its \u2606 to save it here. Swipe a favourite left to delete it.</div>' + toolsRow;
       return;
     }
     fp.innerHTML = sorted.map(function (x) {
@@ -991,7 +1043,7 @@
           ? '<button class="mini" style="background:var(--green);color:#06240f;border-color:var(--green);font-weight:700" onclick="addFromFav(' + x.i + ')">\u2713 In run</button>'
           : '<button class="mini" style="background:#1E90FF;color:#000;border-color:#1E90FF;font-weight:700" onclick="addFromFav(' + x.i + ')">Add</button>') +
         '</div></div>';
-    }).join('');
+    }).join('') + toolsRow;
   }
   // swipe-left-to-reveal-delete, delegated so listeners survive rebuilds
   var favSwipe = { el: null, startX: 0, startY: 0, base: 0, off: 0, horiz: null };
