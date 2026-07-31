@@ -106,8 +106,22 @@
   .job.pending-geo { border-style: dashed; }
 
   .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 34px 20px; border: 1px dashed var(--line); border-radius: 12px; }
-  .footer-actions { margin-top: 20px; display: flex; gap: 8px; }
-  .footer-actions button { flex: 1; background: none; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 13px; padding: 12px; cursor: pointer; }
+  .footer-actions { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .footer-actions button { flex: 1 1 30%; min-width: 96px; background: none; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 13px; padding: 12px; cursor: pointer; }
+  .set-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 10px; }
+  .set-panel h4 { font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); margin-bottom: 6px; }
+  .set-panel .state { font-size: 13px; color: var(--text); margin-bottom: 10px; }
+  .set-panel .state b { color: var(--green); }
+  .set-panel input { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; color: var(--text); font-size: 14px; outline: none; margin-bottom: 8px; }
+  .set-panel input:focus { border-color: var(--amber); }
+  .set-btns { display: flex; gap: 8px; margin-bottom: 10px; }
+  .set-btns button { flex: 1; border-radius: 10px; font-size: 13px; padding: 12px 6px; cursor: pointer; border: 1px solid var(--line); background: none; color: var(--muted); }
+  .set-btns button.save { background: #1E90FF; color: #000; border-color: #1E90FF; font-weight: 700; }
+  .set-status { font-size: 12px; margin-bottom: 10px; min-height: 15px; color: var(--amber); }
+  .set-status.ok { color: var(--green); }
+  .set-status.bad { color: var(--red); }
+  .set-help { font-size: 12px; color: var(--muted); line-height: 1.55; }
+  .set-help code { color: var(--text); font-size: 11px; overflow-wrap: anywhere; }
   .note { font-size: 11px; color: var(--muted); text-align: center; margin-top: 18px; line-height: 1.5; }
 
   .suggest { background: var(--surface); border: 1px solid var(--amber); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
@@ -176,9 +190,11 @@
   <button onclick="setStartPoint()">Set start point</button>
   <button id="clearDoneBtn">Clear delivered</button>
   <button id="clearAllBtn">Clear all</button>
+  <button onclick="toggleSettings()">Settings</button>
 </div>
+<div id="setPanel"></div>
 
-<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Build 824</p>
+<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Build 825</p>
 
 <script>
 (function () {
@@ -1170,7 +1186,9 @@
   }
 
   // ---------- Mapbox live-traffic routing (beta) ----------
-  var MAPBOX_TOKEN = 'pk.eyJ1IjoiYW5kcmV3c3RpbnNvbiIsImEiOiJjbXJyMjVmbW4wbDZ3NDhxMHpidWZ0NHA0In0.6bw3fjIXinz61fvsX3hK7g';
+  var DEFAULT_MAPBOX_TOKEN = 'pk.eyJ1IjoiYW5kcmV3c3RpbnNvbiIsImEiOiJjbXJyMjVmbW4wbDZ3NDhxMHpidWZ0NHA0In0.6bw3fjIXinz61fvsX3hK7g';
+  function ownToken() { return String(store.get('runsheet_mbx') || '').trim(); }
+  var MAPBOX_TOKEN = ownToken() || DEFAULT_MAPBOX_TOKEN;
   function mbxRoute(p, j, avoidTolls) {
     if (!MAPBOX_TOKEN || MAPBOX_TOKEN.indexOf('PASTE') === 0) return Promise.resolve(null);
     var lbl = avoidTolls ? 'MBX-notoll' : 'MBX-alts';
@@ -1364,6 +1382,90 @@
       })
       .finally(function () { tollBusy = false; });
   }
+
+  // ---------- settings: bring your own Mapbox key ----------
+  var setPanelOpen = false;
+  function setSetStatus(msg, kind) {
+    var el = document.getElementById('setStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'set-status' + (kind ? ' ' + kind : '');
+  }
+  function renderSettings() {
+    var sp = document.getElementById('setPanel');
+    if (!sp) return;
+    if (!setPanelOpen) { sp.innerHTML = ''; return; }
+    var own = ownToken();
+    sp.innerHTML =
+      '<div class="set-panel">' +
+        '<h4>Map &amp; live traffic key</h4>' +
+        '<div class="state">' + (own
+          ? 'Running on <b>your own Mapbox key</b>.'
+          : 'Running on the <b>built-in shared key</b>. Fine to start with \u2014 add your own if you use the app heavily.') +
+        '</div>' +
+        '<input id="mbxInput" type="text" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Paste your token (starts pk.)" value="' + esc(own) + '">' +
+        '<div class="set-btns">' +
+          '<button class="save" onclick="saveOwnToken()">Save</button>' +
+          '<button onclick="testToken()">Test</button>' +
+          (own ? '<button onclick="clearOwnToken()">Use built-in</button>' : '') +
+        '</div>' +
+        '<div id="setStatus" class="set-status"></div>' +
+        '<div class="set-help">' +
+          '<b>Getting your own key (5 min, free):</b><br>' +
+          '1. Sign up at mapbox.com \u2014 a card is required, but normal courier use sits inside the free allowance.<br>' +
+          '2. Go to <b>Tokens</b> \u2192 <b>Create a token</b>, leave the default scopes ticked.<br>' +
+          '3. Under <b>URL restrictions</b> add: <code>https://runsheetcourier.github.io</code> \u2014 this stops anyone else using your key.<br>' +
+          '4. Copy the token (starts <code>pk.</code>), paste it above, <b>Save</b>, then <b>Test</b>.' +
+        '</div>' +
+      '</div>';
+  }
+  window.toggleSettings = function () {
+    setPanelOpen = !setPanelOpen;
+    renderSettings();
+  };
+  function applyToken(tok) {
+    MAPBOX_TOKEN = tok;
+    try { if (window.mapboxgl) window.mapboxgl.accessToken = tok; } catch (e) { /* map not loaded yet */ }
+    tollJobId = null;   // force a fresh live-traffic fetch on the new key
+    routeSig = '';
+  }
+  window.saveOwnToken = function () {
+    var el = document.getElementById('mbxInput');
+    if (!el) return;
+    var tok = String(el.value || '').trim();
+    if (!tok) { setSetStatus('Nothing to save \u2014 paste a token first.', 'bad'); return; }
+    if (tok.indexOf('pk.') !== 0) {
+      setSetStatus('That doesn\u2019t look right \u2014 a public token starts with "pk." Never paste a secret "sk." token.', 'bad');
+      return;
+    }
+    store.set('runsheet_mbx', tok);
+    applyToken(tok);
+    renderSettings();
+    setSetStatus('Saved. Tap Test to check it works.', 'ok');
+    render();
+  };
+  window.clearOwnToken = function () {
+    store.set('runsheet_mbx', '');
+    applyToken(DEFAULT_MAPBOX_TOKEN);
+    renderSettings();
+    setSetStatus('Back on the built-in key.', 'ok');
+    render();
+  };
+  window.testToken = function () {
+    var el = document.getElementById('mbxInput');
+    var tok = el ? String(el.value || '').trim() : '';
+    if (!tok) tok = MAPBOX_TOKEN;
+    setSetStatus('Testing\u2026');
+    fetch('https://api.mapbox.com/directions/v5/mapbox/driving-traffic/144.96,-37.81;144.98,-37.83' +
+          '?overview=false&access_token=' + encodeURIComponent(tok))
+      .then(function (r) {
+        if (r.status === 200) { setSetStatus('Key works \u2014 live traffic ready.', 'ok'); }
+        else if (r.status === 401 || r.status === 403) {
+          setSetStatus('Key refused (HTTP ' + r.status + '). Check it is copied in full and that this site is listed in its URL restrictions.', 'bad');
+        } else { setSetStatus('Mapbox answered HTTP ' + r.status + '. Try again in a moment.', 'bad'); }
+      })
+      .catch(function () { setSetStatus('No answer from Mapbox \u2014 check your signal and try again.', 'bad'); });
+  };
 
   // ---------- render ----------
   function render() {
