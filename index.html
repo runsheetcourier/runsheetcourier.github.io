@@ -138,6 +138,7 @@
   .me-recenter { position: absolute; right: 10px; bottom: 26px; z-index: 5; width: 44px; height: 44px; border-radius: 50%; background: var(--surface); color: #1e88ff; border: 1px solid var(--line); font-size: 24px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
   .me-recenter.follow { border-color: var(--amber); color: var(--amber); box-shadow: 0 0 0 2px var(--amber-dim), 0 2px 8px rgba(0,0,0,0.4); }
   .mapboxgl-popup-content { color: #000 !important; font-size: 13px; font-weight: 600; line-height: 1.4; }
+  .pin-go { display: block; margin-top: 6px; background: #1E90FF; color: #000 !important; text-decoration: none; text-align: center; border-radius: 8px; padding: 9px 12px; font-weight: 700; font-size: 13px; }
   .job-pin { width: 27px; height: 27px; border-radius: 50%; background: #E8ECF0; color: #14181D; font-family: var(--display); font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.45); cursor: pointer; }
   .job-pin.E { background: var(--red); color: #2a0606; }
   .job-pin.D { background: var(--amber); color: #241a00; }
@@ -195,7 +196,7 @@
 </div>
 <div id="setPanel"></div>
 
-<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Build 827</p>
+<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Build 828</p>
 
 <script>
 (function () {
@@ -749,9 +750,15 @@
     mbMarkers.forEach(function (m) { m.remove(); });
     mbMarkers = [];
     var pts = [];
+    function pinPopupHtml(label, lat, lon) {
+      return '<div>' + esc(label) + '</div>' +
+             '<a class="pin-go" href="https://www.google.com/maps/dir/?api=1&destination=' +
+             lat + ',' + lon + '&travelmode=driving" target="runsheet_nav" rel="noopener">Directions</a>';
+    }
     function addPin(el, lon, lat, popupText) {
       var mk = new mapboxgl.Marker({ element: el }).setLngLat([lon, lat]);
-      if (popupText) mk.setPopup(new mapboxgl.Popup({ offset: 18, closeButton: false }).setText(popupText));
+      if (popupText) mk.setPopup(new mapboxgl.Popup({ offset: 18, closeButton: false })
+        .setHTML(pinPopupHtml(popupText, lat, lon)));
       mk.addTo(mbMap);
       mbMarkers.push(mk);
       pts.push([lon, lat]);
@@ -785,7 +792,8 @@
         wel.className = 'wc-pin';
         wel.textContent = '\ud83d\udebb';
         var wmk = new mapboxgl.Marker({ element: wel }).setLngLat([st.lon, st.lat]);
-        wmk.setPopup(new mapboxgl.Popup({ offset: 16, closeButton: false }).setText(st.name));
+        wmk.setPopup(new mapboxgl.Popup({ offset: 16, closeButton: false })
+          .setHTML(pinPopupHtml(st.name, st.lat, st.lon)));
         wmk.addTo(mbMap);
         mbMarkers.push(wmk);
       });
@@ -796,7 +804,8 @@
         fel.className = 'fuel-pin' + (st.costco ? ' costco' : '');
         fel.textContent = '\u26FD';
         var fmk = new mapboxgl.Marker({ element: fel }).setLngLat([st.lon, st.lat]);
-        fmk.setPopup(new mapboxgl.Popup({ offset: 16, closeButton: false }).setText(st.name));
+        fmk.setPopup(new mapboxgl.Popup({ offset: 16, closeButton: false })
+          .setHTML(pinPopupHtml(st.name, st.lat, st.lon)));
         fmk.addTo(mbMap);
         mbMarkers.push(fmk);
       });
