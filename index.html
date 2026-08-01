@@ -148,6 +148,7 @@
   .fuel-toggle { position: absolute; right: 10px; bottom: 78px; z-index: 5; width: 44px; height: 44px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); font-size: 20px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
   .fuel-toggle.on { border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber-dim), 0 2px 8px rgba(0,0,0,0.4); }
   .fuel-pin { width: 22px; height: 22px; border-radius: 50%; background: #20262e; font-size: 12px; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.45); cursor: pointer; }
+  .fuel-pin.costco { width: 27px; height: 27px; background: #0060A9; font-size: 14px; border-width: 3px; box-shadow: 0 0 0 2px rgba(0,96,169,0.35), 0 1px 5px rgba(0,0,0,0.5); }
   .fuel-status { position: absolute; left: 10px; bottom: 26px; z-index: 5; background: var(--surface); color: var(--muted); border: 1px solid var(--line); border-radius: 8px; font-size: 11px; padding: 5px 9px; max-width: 60%; }
   .wc-toggle { position: absolute; right: 10px; bottom: 130px; z-index: 5; width: 44px; height: 44px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); font-size: 18px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
   .wc-toggle.on { border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber-dim), 0 2px 8px rgba(0,0,0,0.4); }
@@ -194,7 +195,7 @@
 </div>
 <div id="setPanel"></div>
 
-<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Build 826</p>
+<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Build 827</p>
 
 <script>
 (function () {
@@ -623,8 +624,21 @@
     }
     fuelLoading = true;
     setFuelStatus('Finding servos\u2026');
-    var q = '[out:json][timeout:12];(node["amenity"="fuel"](' + sBox + ',' + wBox + ',' + nBox + ',' + eBox + ');' +
-            'way["amenity"="fuel"](' + sBox + ',' + wBox + ',' + nBox + ',' + eBox + '););out center 120;';
+    // Costco sites are sparse and worth a detour, so they get a much wider sweep
+    // than the ordinary servos around the run.
+    var PAD = 0.30; // roughly 30 km
+    var box = sBox + ',' + wBox + ',' + nBox + ',' + eBox;
+    var wide = (sBox - PAD) + ',' + (wBox - PAD) + ',' + (nBox + PAD) + ',' + (eBox + PAD);
+    var q = '[out:json][timeout:20];(' +
+            'node["amenity"="fuel"](' + box + ');' +
+            'way["amenity"="fuel"](' + box + ');' +
+            'node["amenity"="fuel"]["brand"~"Costco",i](' + wide + ');' +
+            'way["amenity"="fuel"]["brand"~"Costco",i](' + wide + ');' +
+            'node["amenity"="fuel"]["name"~"Costco",i](' + wide + ');' +
+            'way["amenity"="fuel"]["name"~"Costco",i](' + wide + ');' +
+            'node["amenity"="fuel"]["operator"~"Costco",i](' + wide + ');' +
+            'way["amenity"="fuel"]["operator"~"Costco",i](' + wide + ');' +
+            ');out center 200;';
     fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -639,23 +653,29 @@
           var tg = el.tags || {};
           if (tg['fuel:diesel'] === 'no') return null; // explicitly no diesel
           var nm = tg.brand || tg.name || 'Servo';
-          return { lat: lat, lon: lon, name: nm };
+          var isCostco = /costco/i.test((tg.brand || '') + ' ' + (tg.name || '') + ' ' + (tg.operator || ''));
+          return { lat: lat, lon: lon, name: isCostco ? 'Costco fuel (membership)' : nm, costco: isCostco };
         }).filter(Boolean);
-        // keep the 45 closest to a job or to us, so metro sprawl doesn't bury the run
+        var costco = list.filter(function (st) { return st.costco; });
+        var others = list.filter(function (st) { return !st.costco; });
+        // keep the 45 closest ordinary servos so metro sprawl doesn't bury the run;
+        // Costco sites are always kept, however far out they sit
         var anchors = jobs.filter(function (j) { return j.lat != null; }).slice();
         var p2 = posNow();
         if (p2) anchors.push(p2);
-        if (anchors.length && list.length > 45) {
-          list.forEach(function (st) {
+        if (anchors.length && others.length > 45) {
+          others.forEach(function (st) {
             st._d = Math.min.apply(null, anchors.map(function (a) { return haversineKm(a, st); }));
           });
-          list.sort(function (a, b) { return a._d - b._d; });
-          list = list.slice(0, 45);
+          others.sort(function (a, b) { return a._d - b._d; });
+          others = others.slice(0, 45);
         }
+        list = costco.concat(others);
         fuelCache = { list: list, ts: Date.now(), cLat: cLat, cLon: cLon };
         refreshMapMarkers(false);
-        setFuelStatus(list.length ? list.length + ' servos \u00b7 prices come with the gov data key'
-                                  : 'No servos found in this area');
+        setFuelStatus(list.length
+          ? others.length + ' servos' + (costco.length ? ' \u00b7 ' + costco.length + ' Costco' : '')
+          : 'No servos found in this area');
       })
       .catch(function () {
         setFuelStatus('Servos unavailable \u2014 tap \u26FD twice to retry');
@@ -773,7 +793,7 @@
     if (fuelOn && fuelCache && fuelCache.list.length) {
       fuelCache.list.forEach(function (st) {
         var fel = document.createElement('div');
-        fel.className = 'fuel-pin';
+        fel.className = 'fuel-pin' + (st.costco ? ' costco' : '');
         fel.textContent = '\u26FD';
         var fmk = new mapboxgl.Marker({ element: fel }).setLngLat([st.lon, st.lat]);
         fmk.setPopup(new mapboxgl.Popup({ offset: 16, closeButton: false }).setText(st.name));
