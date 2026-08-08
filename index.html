@@ -122,6 +122,8 @@
   .set-status.bad { color: var(--red); }
   .set-help { font-size: 12px; color: var(--muted); line-height: 1.55; }
   .set-help code { color: var(--text); font-size: 11px; overflow-wrap: anywhere; }
+  .update-bar { position: sticky; top: 0; z-index: 20; background: var(--green); color: #06240f; font-family: var(--display); font-weight: 700; font-size: 14px; letter-spacing: 0.03em; text-align: center; padding: 13px 12px; cursor: pointer; border-radius: 0 0 12px 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.45); }
+  .update-bar small { display: block; font-family: var(--body); font-weight: 500; font-size: 11px; letter-spacing: 0; opacity: 0.8; margin-top: 2px; }
   .note { font-size: 11px; color: var(--muted); text-align: center; margin-top: 18px; line-height: 1.5; }
 
   .suggest { background: var(--surface); border: 1px solid var(--amber); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
@@ -202,7 +204,7 @@
 </div>
 <div id="setPanel"></div>
 
-<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Fuel prices: Service Victoria Fair Fuel Open Data (published with a ~24 hour delay). Not endorsed by the Victorian Government.<br>Build 830</p>
+<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Fuel prices: Service Victoria Fair Fuel Open Data (published with a ~24 hour delay). Not endorsed by the Victorian Government.<br>Build <span id="buildTag">831</span></p>
 
 <script>
 (function () {
@@ -1479,6 +1481,56 @@
   }
   startLiveTimer();
 
+  // ---------- update checker ----------
+  // Safari (and the installed web app) cache the page hard, so we ask the server
+  // for a fresh copy, compare its build number, and offer a one-tap reload.
+  var APP_BUILD = '831';
+  var lastUpdateCheck = 0, updateSeen = null;
+  function applyBuildTag() {
+    var el = document.getElementById('buildTag');
+    if (el) el.textContent = APP_BUILD;
+  }
+  function showUpdateBar(build) {
+    if (document.getElementById('updateBar')) return;
+    var bar = document.createElement('div');
+    bar.id = 'updateBar';
+    bar.className = 'update-bar';
+    bar.innerHTML = 'Update available \u2014 tap to load Build ' + esc(build) +
+                    '<small>You are on Build ' + esc(APP_BUILD) + '</small>';
+    bar.addEventListener('click', reloadFresh);
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+  function reloadFresh() {
+    // a URL the cache has never seen forces Safari to fetch the new file
+    location.replace(location.pathname + '?v=' + Date.now());
+  }
+  function checkForUpdate(manual) {
+    if (!manual && Date.now() - lastUpdateCheck < 10 * 60000) return;
+    lastUpdateCheck = Date.now();
+    if (manual) setSetStatus('Checking\u2026');
+    fetch(location.pathname + '?probe=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.text(); })
+      .then(function (text) {
+        var m = text.match(/Build (?:<span id="buildTag">)?(\d+)/);
+        if (!m) { if (manual) setSetStatus('Could not read the version on the server.', 'bad'); return; }
+        var live = m[1];
+        if (live !== APP_BUILD) {
+          updateSeen = live;
+          showUpdateBar(live);
+          if (manual) setSetStatus('Build ' + live + ' is available \u2014 tap the green bar at the top.', 'ok');
+        } else if (manual) {
+          setSetStatus('You are on the latest version (Build ' + APP_BUILD + ').', 'ok');
+        }
+      })
+      .catch(function () {
+        if (manual) setSetStatus('Could not check \u2014 no signal?', 'bad');
+      });
+  }
+  window.checkUpdateNow = function () { checkForUpdate(true); };
+  window.forceReload = reloadFresh;
+  applyBuildTag();
+  setTimeout(function () { checkForUpdate(false); }, 3000);
+
   // ---------- settings: bring your own Mapbox key ----------
   var setPanelOpen = false;
   function setSetStatus(msg, kind) {
@@ -1512,6 +1564,14 @@
           '2. Go to <b>Tokens</b> \u2192 <b>Create a token</b>, leave the default scopes ticked.<br>' +
           '3. Under <b>URL restrictions</b> add: <code>https://runsheetcourier.github.io</code> \u2014 this stops anyone else using your key.<br>' +
           '4. Copy the token (starts <code>pk.</code>), paste it above, <b>Save</b>, then <b>Test</b>.' +
+        '</div>' +
+        '<h4 style="margin-top:16px">App version</h4>' +
+        '<div class="state">Running <b>Build ' + esc(APP_BUILD) + '</b>' +
+          (updateSeen && updateSeen !== APP_BUILD ? ' \u2014 Build ' + esc(updateSeen) + ' is available' : '') +
+        '</div>' +
+        '<div class="set-btns">' +
+          '<button onclick="checkUpdateNow()">Check for update</button>' +
+          '<button onclick="forceReload()">Force refresh</button>' +
         '</div>' +
       '</div>';
   }
@@ -1806,6 +1866,7 @@
   }, 30000);
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) {
+      checkForUpdate(false);
       // Traffic moved on while we were away - refetch live times for the next job
       tollJobId = null;
       reloadFromStorage();
