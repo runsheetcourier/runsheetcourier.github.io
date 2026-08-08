@@ -204,7 +204,7 @@
 </div>
 <div id="setPanel"></div>
 
-<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Fuel prices: Service Victoria Fair Fuel Open Data (published with a ~24 hour delay). Not endorsed by the Victorian Government.<br>Build <span id="buildTag">832</span></p>
+<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Fuel prices: Service Victoria Fair Fuel Open Data (published with a ~24 hour delay). Not endorsed by the Victorian Government.<br>Build <span id="buildTag">834</span></p>
 
 <script>
 (function () {
@@ -656,9 +656,10 @@
     }
     fuelLoading = true;
     setFuelStatus('Getting diesel prices\u2026');
-    function ask(r) {
+    function ask(r, brand) {
       return fetch(FUEL_API + '?lat=' + cLat.toFixed(5) + '&lon=' + cLon.toFixed(5) +
-                   '&radius=' + r + '&fuel=' + FUEL_TYPE)
+                   '&radius=' + r + '&fuel=' + FUEL_TYPE +
+                   (brand ? '&brand=' + encodeURIComponent(brand) : ''))
         .then(function (resp) {
           if (!resp.ok) throw new Error('http ' + resp.status);
           return resp.json();
@@ -677,21 +678,29 @@
     }
     // Costco sites are sparse and worth a detour, so they get a much wider sweep
     // than the servos around the run itself.
-    Promise.all([ask(radius), ask(COSTCO_RADIUS).catch(function () { return null; })])
+    Promise.all([ask(radius), fetchCostcoSites(cLat, cLon).catch(function () { return []; })])
       .then(function (both) {
-        var res = both[0], wide = both[1];
+        var res = both[0], costcoSites = both[1] || [];
         var list = (res && res.stations ? res.stations : []).map(shape)
                      .filter(function (st) { return st.lat != null && st.lon != null; });
         // the cheap band is judged on the servos near the run, not the wide sweep
         markCheap(list);
         var seen = {};
         list.forEach(function (st) { seen[st.lat.toFixed(4) + ',' + st.lon.toFixed(4)] = true; });
-        (wide && wide.stations ? wide.stations : []).forEach(function (raw) {
-          if (!isCostcoName(raw.name) || raw.lat == null || raw.lon == null) return;
-          var key = raw.lat.toFixed(4) + ',' + raw.lon.toFixed(4);
+        costcoSites.forEach(function (site) {
+          var key = site.lat.toFixed(4) + ',' + site.lon.toFixed(4);
           if (seen[key]) return;
           seen[key] = true;
-          list.push(shape(raw));
+          list.push({
+            lat: site.lat, lon: site.lon,
+            name: 'Costco fuel',
+            address: site.address || '',
+            price: null,               // members-only sites aren't in the government feed
+            updatedAt: null,
+            isAvailable: true,
+            costco: true,
+            noPrice: true
+          });
         });
         fuelCache = { list: list, ts: Date.now(), cLat: cLat, cLon: cLon };
         refreshMapMarkers(false);
@@ -703,6 +712,38 @@
       .finally(function () { fuelLoading = false; });
   }
   var CHEAP_BAND = 0.10;      // show the cheapest tenth of the servos near the run
+  var COSTCO_PAD = 0.35;     // ~38km box - Costco is sparse and worth a detour
+  // Costco is members-only and does not appear in the Service Victoria open data feed,
+  // so its locations come from OpenStreetMap and carry no price.
+  function fetchCostcoSites(cLat, cLon) {
+    var box = (cLat - COSTCO_PAD) + ',' + (cLon - COSTCO_PAD) + ',' +
+              (cLat + COSTCO_PAD) + ',' + (cLon + COSTCO_PAD);
+    var q = '[out:json][timeout:15];(' +
+            'node["amenity"="fuel"]["brand"~"Costco",i](' + box + ');' +
+            'way["amenity"="fuel"]["brand"~"Costco",i](' + box + ');' +
+            'node["amenity"="fuel"]["name"~"Costco",i](' + box + ');' +
+            'way["amenity"="fuel"]["name"~"Costco",i](' + box + ');' +
+            'node["amenity"="fuel"]["operator"~"Costco",i](' + box + ');' +
+            'way["amenity"="fuel"]["operator"~"Costco",i](' + box + ');' +
+            ');out center 30;';
+    return fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(q)
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        return (res && res.elements ? res.elements : []).map(function (el) {
+          var la = el.lat != null ? el.lat : (el.center && el.center.lat);
+          var lo = el.lon != null ? el.lon : (el.center && el.center.lon);
+          if (la == null || lo == null) return null;
+          var tg = el.tags || {};
+          var addr = [tg['addr:housenumber'], tg['addr:street'], tg['addr:suburb']]
+                       .filter(Boolean).join(' ');
+          return { lat: la, lon: lo, address: addr };
+        }).filter(Boolean);
+      });
+  }
   var COSTCO_RADIUS = 60;    // km - Costco is sparse and worth a detour
   function isCostcoName(n) { return /costco/i.test(String(n || '')); }
   function markCheap(list) {
@@ -735,10 +776,11 @@
     });
     var band = cheapBandInfo(list);
     var costcoShown = list.filter(function (st) { return st.costco && !st.cheap && !st.best; }).length;
+    var noPriceCount = list.filter(function (st) { return st.noPrice; }).length;
     var checked = list.filter(function (st) { return !st.costco || st.cheap || st.best; }).length;
     return 'Showing ' + band.count + ' cheapest' +
            (band.upto != null ? ' (to ' + fmtCents(band.upto) + 'c)' : '') +
-           (costcoShown ? ' + ' + costcoShown + ' Costco' : '') +
+           (costcoShown ? ' + ' + costcoShown + ' Costco' + (noPriceCount ? ' (no price)' : '') : '') +
            ' of ' + checked + ' checked \u00b7 best ' + fmtCents(best) + 'c' +
            (bestAge ? ' ' + bestAge : '') + ' \u00b7 Service Victoria';
   }
@@ -869,6 +911,7 @@
         fmk.setPopup(new mapboxgl.Popup({ offset: 16, closeButton: false })
           .setHTML(pinPopupHtml(
             st.name + (st.costco ? ' (membership)' : '') +
+            (st.noPrice ? ' \u2014 price not published' : '') +
             (st.price != null ? ' \u2014 diesel ' + fmtCents(st.price) + 'c' : '') +
             (st.isAvailable ? '' : ' (listed unavailable)') +
             (st.updatedAt ? ' \u00b7 ' + priceAge(st.updatedAt) : '') +
@@ -1509,7 +1552,7 @@
   // ---------- update checker ----------
   // Safari (and the installed web app) cache the page hard, so we ask the server
   // for a fresh copy, compare its build number, and offer a one-tap reload.
-  var APP_BUILD = '832';
+  var APP_BUILD = '834';
   var lastUpdateCheck = 0, updateSeen = null;
   function applyBuildTag() {
     var el = document.getElementById('buildTag');
