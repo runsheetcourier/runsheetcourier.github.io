@@ -151,8 +151,10 @@
   .fuel-pin { width: 22px; height: 22px; border-radius: 50%; background: #20262e; font-size: 12px; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.45); cursor: pointer; }
   .fuel-pin.costco { width: 27px; height: 27px; background: #0060A9; font-size: 14px; border-width: 3px; box-shadow: 0 0 0 2px rgba(0,96,169,0.35), 0 1px 5px rgba(0,0,0,0.5); }
   .price-pin { min-width: 42px; height: 22px; padding: 0 5px; border-radius: 11px; background: #20262e; color: #fff; font-family: var(--display); font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.45); cursor: pointer; white-space: nowrap; }
-  .price-pin.cheap { background: var(--green); color: #06240f; height: 26px; min-width: 48px; border-radius: 13px; font-size: 13px; border-width: 3px; box-shadow: 0 0 0 2px rgba(55,200,113,0.35), 0 1px 5px rgba(0,0,0,0.5); }
+  .price-pin.cheap { background: var(--green); color: #06240f; }
+  .price-pin.best { background: var(--green); color: #06240f; height: 26px; min-width: 48px; border-radius: 13px; font-size: 13px; border-width: 3px; box-shadow: 0 0 0 2px rgba(55,200,113,0.35), 0 1px 5px rgba(0,0,0,0.5); }
   .price-pin.costco { background: #0060A9; }
+  .price-pin.cheap.costco, .price-pin.best.costco { background: var(--green); color: #06240f; border-color: #0060A9; }
   .price-pin.stale { opacity: 0.75; }
   .fuel-status { position: absolute; left: 10px; bottom: 26px; z-index: 5; background: var(--surface); color: var(--muted); border: 1px solid var(--line); border-radius: 8px; font-size: 11px; padding: 5px 9px; max-width: 60%; }
   .wc-toggle { position: absolute; right: 10px; bottom: 130px; z-index: 5; width: 44px; height: 44px; border-radius: 50%; background: var(--surface); border: 1px solid var(--line); font-size: 18px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
@@ -200,7 +202,7 @@
 </div>
 <div id="setPanel"></div>
 
-<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Fuel prices: Service Victoria Fair Fuel Open Data (published with a ~24 hour delay). Not endorsed by the Victorian Government.<br>Build 829</p>
+<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Fuel prices: Service Victoria Fair Fuel Open Data (published with a ~24 hour delay). Not endorsed by the Victorian Government.<br>Build 830</p>
 
 <script>
 (function () {
@@ -670,13 +672,8 @@
             costco: /costco/i.test(st.name || '')
           };
         }).filter(function (st) { return st.lat != null && st.lon != null; });
-        // mark the cheapest so it stands out on the map
-        var best = null;
-        list.forEach(function (st) {
-          if (st.isAvailable && st.price != null && (best == null || st.price < best)) best = st.price;
-        });
-        list.forEach(function (st) { st.cheapest = (best != null && st.price === best); });
-        fuelCache = { list: list, ts: Date.now(), cLat: cLat, cLon: cLon, best: best };
+        markCheap(list);
+        fuelCache = { list: list, ts: Date.now(), cLat: cLat, cLon: cLon };
         refreshMapMarkers(false);
         setFuelStatus(fuelSummary(list));
       })
@@ -684,6 +681,27 @@
         setFuelStatus('Fuel prices unavailable \u2014 tap \u26FD twice to retry');
       })
       .finally(function () { fuelLoading = false; });
+  }
+  var CHEAP_BAND = 0.10;   // highlight the cheapest tenth of what's on screen
+  function markCheap(list) {
+    var priced = list.filter(function (st) { return st.isAvailable && st.price != null; })
+                     .sort(function (a, b) { return a.price - b.price; });
+    list.forEach(function (st) { st.cheap = false; st.best = false; });
+    if (!priced.length) return;
+    // at least one always highlighted, even on a short list
+    var k = Math.max(1, Math.ceil(priced.length * CHEAP_BAND));
+    var threshold = priced[k - 1].price;
+    var lowest = priced[0].price;
+    priced.forEach(function (st) {
+      if (st.price <= threshold) st.cheap = true;   // ties at the cut-off count in
+      if (st.price === lowest) { st.best = true; st.cheap = false; }
+    });
+  }
+  function cheapBandInfo(list) {
+    var green = list.filter(function (st) { return st.cheap || st.best; });
+    var top = null;
+    green.forEach(function (st) { if (top == null || st.price > top) top = st.price; });
+    return { count: green.length, upto: top };
   }
   function fuelSummary(list) {
     if (!list || !list.length) return 'No diesel prices found near this run';
@@ -693,8 +711,11 @@
         best = st.price; bestAge = priceAge(st.updatedAt);
       }
     });
-    return list.length + ' servos \u00b7 cheapest diesel ' + fmtCents(best) + 'c' +
-           (bestAge ? ' (' + bestAge + ')' : '') + ' \u00b7 Service Victoria';
+    var band = cheapBandInfo(list);
+    return list.length + ' servos \u00b7 green = cheapest ' + band.count +
+           (band.upto != null ? ' (to ' + fmtCents(band.upto) + 'c)' : '') +
+           ' \u00b7 best ' + fmtCents(best) + 'c' + (bestAge ? ' ' + bestAge : '') +
+           ' \u00b7 Service Victoria';
   }
   function setWcStatus(txt) {
     if (!wcStatusEl) return;
@@ -814,7 +835,7 @@
     if (fuelOn && fuelCache && fuelCache.list.length) {
       fuelCache.list.forEach(function (st) {
         var fel = document.createElement('div');
-        fel.className = 'price-pin' + (st.cheapest ? ' cheap' : '') +
+        fel.className = 'price-pin' + (st.best ? ' best' : (st.cheap ? ' cheap' : '')) +
                         (st.costco ? ' costco' : '') + (st.isAvailable ? '' : ' stale');
         fel.textContent = st.price != null ? fmtCents(st.price) : '\u26FD';
         var fmk = new mapboxgl.Marker({ element: fel }).setLngLat([st.lon, st.lat]);
