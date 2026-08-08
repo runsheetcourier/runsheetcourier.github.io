@@ -204,7 +204,7 @@
 </div>
 <div id="setPanel"></div>
 
-<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Fuel prices: Service Victoria Fair Fuel Open Data (published with a ~24 hour delay). Not endorsed by the Victorian Government.<br>Build <span id="buildTag">831</span></p>
+<p class="note">Searches are limited to Victoria and prefer the match closest to you. Distances are driving distance where available, recalculated as you move.<br>Geocoding: Mapbox, OpenStreetMap Nominatim &amp; Photon. Routing: Mapbox (live traffic), OSRM &amp; openrouteservice.<br>Fuel prices: Service Victoria Fair Fuel Open Data (published with a ~24 hour delay). Not endorsed by the Victorian Government.<br>Build <span id="buildTag">832</span></p>
 
 <script>
 (function () {
@@ -656,25 +656,43 @@
     }
     fuelLoading = true;
     setFuelStatus('Getting diesel prices\u2026');
-    fetch(FUEL_API + '?lat=' + cLat.toFixed(5) + '&lon=' + cLon.toFixed(5) +
-          '&radius=' + radius + '&fuel=' + FUEL_TYPE)
-      .then(function (r) {
-        if (!r.ok) throw new Error('http ' + r.status);
-        return r.json();
-      })
-      .then(function (res) {
-        var list = (res && res.stations ? res.stations : []).map(function (st) {
-          return {
-            lat: st.lat, lon: st.lon,
-            name: st.name || 'Servo',
-            address: st.address || '',
-            price: st.price,
-            updatedAt: st.updatedAt,
-            isAvailable: st.isAvailable !== false,
-            costco: /costco/i.test(st.name || '')
-          };
-        }).filter(function (st) { return st.lat != null && st.lon != null; });
+    function ask(r) {
+      return fetch(FUEL_API + '?lat=' + cLat.toFixed(5) + '&lon=' + cLon.toFixed(5) +
+                   '&radius=' + r + '&fuel=' + FUEL_TYPE)
+        .then(function (resp) {
+          if (!resp.ok) throw new Error('http ' + resp.status);
+          return resp.json();
+        });
+    }
+    function shape(st) {
+      return {
+        lat: st.lat, lon: st.lon,
+        name: st.name || 'Servo',
+        address: st.address || '',
+        price: st.price,
+        updatedAt: st.updatedAt,
+        isAvailable: st.isAvailable !== false,
+        costco: isCostcoName(st.name)
+      };
+    }
+    // Costco sites are sparse and worth a detour, so they get a much wider sweep
+    // than the servos around the run itself.
+    Promise.all([ask(radius), ask(COSTCO_RADIUS).catch(function () { return null; })])
+      .then(function (both) {
+        var res = both[0], wide = both[1];
+        var list = (res && res.stations ? res.stations : []).map(shape)
+                     .filter(function (st) { return st.lat != null && st.lon != null; });
+        // the cheap band is judged on the servos near the run, not the wide sweep
         markCheap(list);
+        var seen = {};
+        list.forEach(function (st) { seen[st.lat.toFixed(4) + ',' + st.lon.toFixed(4)] = true; });
+        (wide && wide.stations ? wide.stations : []).forEach(function (raw) {
+          if (!isCostcoName(raw.name) || raw.lat == null || raw.lon == null) return;
+          var key = raw.lat.toFixed(4) + ',' + raw.lon.toFixed(4);
+          if (seen[key]) return;
+          seen[key] = true;
+          list.push(shape(raw));
+        });
         fuelCache = { list: list, ts: Date.now(), cLat: cLat, cLon: cLon };
         refreshMapMarkers(false);
         setFuelStatus(fuelSummary(list));
@@ -684,7 +702,9 @@
       })
       .finally(function () { fuelLoading = false; });
   }
-  var CHEAP_BAND = 0.10;   // highlight the cheapest tenth of what's on screen
+  var CHEAP_BAND = 0.10;      // show the cheapest tenth of the servos near the run
+  var COSTCO_RADIUS = 60;    // km - Costco is sparse and worth a detour
+  function isCostcoName(n) { return /costco/i.test(String(n || '')); }
   function markCheap(list) {
     var priced = list.filter(function (st) { return st.isAvailable && st.price != null; })
                      .sort(function (a, b) { return a.price - b.price; });
@@ -714,10 +734,13 @@
       }
     });
     var band = cheapBandInfo(list);
-    return list.length + ' servos \u00b7 green = cheapest ' + band.count +
+    var costcoShown = list.filter(function (st) { return st.costco && !st.cheap && !st.best; }).length;
+    var checked = list.filter(function (st) { return !st.costco || st.cheap || st.best; }).length;
+    return 'Showing ' + band.count + ' cheapest' +
            (band.upto != null ? ' (to ' + fmtCents(band.upto) + 'c)' : '') +
-           ' \u00b7 best ' + fmtCents(best) + 'c' + (bestAge ? ' ' + bestAge : '') +
-           ' \u00b7 Service Victoria';
+           (costcoShown ? ' + ' + costcoShown + ' Costco' : '') +
+           ' of ' + checked + ' checked \u00b7 best ' + fmtCents(best) + 'c' +
+           (bestAge ? ' ' + bestAge : '') + ' \u00b7 Service Victoria';
   }
   function setWcStatus(txt) {
     if (!wcStatusEl) return;
@@ -836,6 +859,8 @@
     }
     if (fuelOn && fuelCache && fuelCache.list.length) {
       fuelCache.list.forEach(function (st) {
+        // deliberately uncluttered: the cheapest band, plus Costco wherever it is
+        if (!(st.cheap || st.best || st.costco)) return;
         var fel = document.createElement('div');
         fel.className = 'price-pin' + (st.best ? ' best' : (st.cheap ? ' cheap' : '')) +
                         (st.costco ? ' costco' : '') + (st.isAvailable ? '' : ' stale');
@@ -843,7 +868,7 @@
         var fmk = new mapboxgl.Marker({ element: fel }).setLngLat([st.lon, st.lat]);
         fmk.setPopup(new mapboxgl.Popup({ offset: 16, closeButton: false })
           .setHTML(pinPopupHtml(
-            st.name +
+            st.name + (st.costco ? ' (membership)' : '') +
             (st.price != null ? ' \u2014 diesel ' + fmtCents(st.price) + 'c' : '') +
             (st.isAvailable ? '' : ' (listed unavailable)') +
             (st.updatedAt ? ' \u00b7 ' + priceAge(st.updatedAt) : '') +
@@ -1484,7 +1509,7 @@
   // ---------- update checker ----------
   // Safari (and the installed web app) cache the page hard, so we ask the server
   // for a fresh copy, compare its build number, and offer a one-tap reload.
-  var APP_BUILD = '831';
+  var APP_BUILD = '832';
   var lastUpdateCheck = 0, updateSeen = null;
   function applyBuildTag() {
     var el = document.getElementById('buildTag');
